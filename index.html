@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Project Manager to visualise your bottlenecks</title>
+		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+		<style>
+			body {
+				margin: 0;
+				overflow: hidden;
+				font-family: "JetBrains Mono", "Fira Code", monospace;
+				background: #f4f6f8;
+			}
+
+			canvas {
+				background: #f4f6f8;
+				image-rendering: crisp-edges;
+			}
+
+			/* --- Sidebar & Toolbar Styling (Replaced original #toolbar style) --- */
+			#sidebar {
+				position: fixed;
+				top: 0;
+				right: 0;
+				width: 220px;
+				height: 100vh;
+				background: #fdfdff;
+				box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+				z-index: 20;
+				transition: transform 0.3s ease-in-out;
+				transform: translateX(0);
+				border-left: 1px solid #e0e0e0;
+			}
+
+			#sidebar.collapsed {
+				transform: translateX(100%);
+			}
+
+			.sidebar-toggle-btn {
+				position: absolute;
+				top: 50%;
+				left: 0;
+				transform: translate(-100%, -50%); /* Position it just outside the sidebar */
+				width: 30px;
+				height: 50px;
+				background: #007bff;
+				color: white;
+				border: none;
+				cursor: pointer;
+				font-size: 18px;
+				font-weight: bold;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				border-radius: 8px 0 0 8px;
+				box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.15);
+				transition: background-color 0.2s;
+			}
+			.sidebar-toggle-btn:hover {
+				background-color: #0056b3;
+			}
+
+			#toolbar {
+				display: flex;
+				flex-direction: column; /* Vertical layout */
+				align-items: stretch; /* Stretch items to full width */
+				gap: 15px;
+				padding: 20px 15px;
+				width: 100%;
+				box-sizing: border-box;
+			}
+
+			.btn,
+			.toolbar-item {
+				padding: 10px 16px;
+				border: none;
+				border-radius: 6px;
+				background: #007bff;
+				color: white;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 600;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+				transition: background 0.2s, box-shadow 0.2s;
+				text-align: center;
+			}
+
+			.btn:hover {
+				background: #0069d9;
+				box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+			}
+
+			#helpBtn {
+				background: #17a2b8;
+			}
+			#helpBtn:hover {
+				background: #138496;
+			}
+
+			#deleteProjectBtn {
+				background: #dc3545;
+			}
+			#deleteProjectBtn:hover {
+				background: #c82333;
+			}
+
+			.toolbar-group {
+				display: flex;
+				flex-direction: column;
+				gap: 5px;
+				border-top: 1px solid #eee;
+				padding-top: 15px;
+			}
+
+			#projectStartDate,
+			#projectSelector {
+				border: 1px solid #ccc;
+				background-color: #fff;
+				color: #333;
+				padding: 8px;
+				width: 100%;
+				box-sizing: border-box;
+				border-radius: 4px;
+			}
+
+			.toolbar-label {
+				font-size: 13px;
+				font-weight: 600;
+				color: #555;
+				text-align: left;
+			}
+
+			.project-actions {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 5px;
+			}
+			.project-actions button {
+				padding: 8px;
+				font-size: 12px;
+			}
+			#newProjectBtn {
+				background: #28a745;
+			}
+			#newProjectBtn:hover {
+				background: #218838;
+			}
+			#renameProjectBtn {
+				background: #ffc107;
+				color: #212529;
+			}
+			#renameProjectBtn:hover {
+				background: #e0a800;
+			}
+			/* --- Modal Styling --- */
+			.modal {
+				display: none;
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				background: white;
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+				z-index: 100;
+				font-family: "JetBrains Mono", "Fira Code", monospace;
+			}
+
+			.modal-content {
+				display: flex;
+				flex-direction: column;
+				width: 100%;
+				height: 100%;
+				font-family: "JetBrains Mono", "Fira Code", monospace;
+			}
+
+			#taskModal {
+				width: 320px;
+			}
+
+			#ganttModal {
+				width: 85%;
+				height: 85%;
+				max-width: 1400px;
+				display: none; /* Changed from 'flex' to 'none' by default */
+			}
+
+			.modal h2 {
+				margin-top: 0;
+				font-size: 18px;
+				color: #333;
+				border-bottom: 1px solid #eee;
+				padding-bottom: 10px;
+				margin-bottom: 15px;
+				font-weight: 700;
+				flex-shrink: 0;
+			}
+
+			.modal input:not([type="checkbox"]),
+			.modal textarea {
+				width: 100%;
+				margin: 8px 0;
+				padding: 10px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				font-family: inherit;
+				font-size: 14px;
+				box-sizing: border-box;
+			}
+
+			.modal input:focus,
+			.modal textarea:focus {
+				border-color: #007bff;
+				outline: none;
+				box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+			}
+
+			.modal textarea {
+				resize: vertical;
+				height: 80px;
+			}
+
+			.modal-checkbox-group {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				margin: 15px 0;
+				font-size: 14px;
+				color: #555;
+			}
+
+			.modal-footer {
+				text-align: right;
+				margin-top: 15px;
+				flex-shrink: 0;
+			}
+
+			.modal-footer button {
+				margin-left: 10px;
+				padding: 10px 18px;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				font-family: inherit;
+				font-weight: 600;
+				transition: opacity 0.2s;
+			}
+
+			.modal-footer button:hover {
+				opacity: 0.9;
+			}
+
+			#saveTask {
+				background: #007bff;
+				color: white;
+			}
+
+			#closeModal,
+			#closeGanttModal {
+				background: #6c757d;
+				color: white;
+			}
+
+			#ganttChartDiv {
+				width: 100%;
+				flex-grow: 1;
+				min-height: 200px;
+				font-family: "JetBrains Mono", "Fira Code", monospace;
+				overflow-y: auto; /* Allow scrolling if content overflows */
+			}
+
+			/* --- Node Context Menu Styling --- */
+			#nodeMenu {
+				position: absolute;
+				background: white;
+				border-radius: 6px;
+				box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+				padding: 4px 0;
+				display: none;
+				flex-direction: column;
+				z-index: 200;
+				font-family: "JetBrains Mono", "Fira Code", monospace;
+				min-width: 100px;
+			}
+
+			#nodeMenu button {
+				border: none;
+				background: none;
+				padding: 8px 12px;
+				text-align: left;
+				cursor: pointer;
+				font-size: 13px;
+				width: 100%;
+				color: #333;
+			}
+
+			#nodeMenu button:hover {
+				background: #e9ecef;
+			}
+
+			/* --- Coach Mark Styling --- */
+			#coachmark-overlay {
+				display: none;
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				z-index: 9998;
+			}
+			#coachmark-highlight {
+				position: absolute;
+				border-radius: 8px;
+				box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 255, 255, 0.7);
+				transition: all 0.3s ease-in-out;
+				pointer-events: none;
+			}
+
+			#coachmark-box {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				background: #fff;
+				color: #333;
+				padding: 15px 20px;
+				border-radius: 8px;
+				width: 320px;
+				box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+				z-index: 9999;
+				transition: all 0.3s ease-in-out;
+			}
+
+			#coachmark-box h3 {
+				margin-top: 0;
+				font-size: 16px;
+				color: #0056b3;
+			}
+
+			#coachmark-box p {
+				font-size: 14px;
+				line-height: 1.5;
+				margin-bottom: 15px;
+			}
+
+			#coachmark-nav {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				border-top: 1px solid #eee;
+				padding-top: 10px;
+				margin-top: 10px;
+			}
+
+			#coachmark-step-counter {
+				font-size: 12px;
+				color: #666;
+			}
+
+			#coachmark-nav button {
+				background: #007bff;
+				color: white;
+				border: none;
+				padding: 8px 12px;
+				border-radius: 4px;
+				cursor: pointer;
+			}
+			#coachmark-nav button:hover {
+				background: #0056b3;
+			}
+			#coachmark-nav button#coachmark-prev {
+				background: #6c757d;
+			}
+			#coachmark-nav button#coachmark-prev:hover {
+				background: #5a6268;
+			}
+
+			#coachmark-arrow-svg {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				pointer-events: none;
+				z-index: 9998;
+				opacity: 0;
+				transition: opacity 0.3s ease-in-out;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="sidebar" class="collapsed">
+			<button id="sidebarToggle" class="sidebar-toggle-btn">&lt;</button>
+			<div id="toolbar">
+				<div class="toolbar-group">
+					<label for="projectSelector" class="toolbar-label">Project:</label>
+					<select id="projectSelector" class="toolbar-item"></select>
+					<div class="project-actions">
+						<button id="newProjectBtn" class="btn">New</button>
+						<button id="renameProjectBtn" class="btn">Rename</button>
+					</div>
+				</div>
+				<button id="addTask" class="btn">+ Add Task</button>
+				<button id="arrangeBtn" class="btn">Arrange</button>
+				<button id="ganttBtn" class="btn">Generate Gantt</button>
+				<div class="toolbar-group">
+					<label for="projectStartDate" class="toolbar-label">Project Start Date:</label>
+					<input type="date" id="projectStartDate" class="toolbar-item" />
+				</div>
+				<button id="helpBtn" class="btn">Help</button>
+				<button id="deleteProjectBtn" class="btn">Delete Project</button>
+			</div>
+		</div>
+
+		<canvas id="canvas"></canvas>
+
+		<div id="ganttModal" class="modal">
+			<div class="modal-content">
+				<h2>Project Gantt Chart</h2>
+				<div id="ganttChartDiv"></div>
+				<div class="modal-footer">
+					<button id="closeGanttModal">Close</button>
+				</div>
+			</div>
+		</div>
+
+		<div id="taskModal" class="modal">
+			<h2>Edit Task</h2>
+			<input type="text" id="taskName" placeholder="Task name" />
+			<input type="number" id="taskDays" placeholder="Estimated Days" min="0.5" step="0.5" />
+			<textarea id="taskDesc" placeholder="Task description"></textarea>
+			<div class="modal-checkbox-group">
+				<input type="checkbox" id="taskDone" />
+				<label for="taskDone">Mark as Done</label>
+			</div>
+			<div class="modal-footer">
+				<button id="saveTask">Save</button>
+				<button id="closeModal">Cancel</button>
+			</div>
+		</div>
+
+		<div id="nodeMenu">
+			<button id="editBtn">Edit</button>
+			<button id="deleteBtn">Delete</button>
+		</div>
+
+		<div id="coachmark-overlay">
+			<div id="coachmark-highlight"></div>
+			<div id="coachmark-box">
+				<h3 id="coachmark-title"></h3>
+				<p id="coachmark-text"></p>
+				<div id="coachmark-nav">
+					<span id="coachmark-step-counter"></span>
+					<div>
+						<button id="coachmark-prev">Prev</button>
+						<button id="coachmark-next">Next</button>
+						<button id="coachmark-done">Done</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			/**
+			 * Task Dependency Visualizer Application
+			 * This script encapsulates the entire application logic, separating it into
+			 * distinct modules for configuration, state management, DOM interaction,
+			 * business logic, rendering, and UI control.
+			 */
+			let app;
+
+			document.addEventListener("DOMContentLoaded", () => {
+				google.charts.load("current", { packages: ["gantt"] });
+				google.charts.setOnLoadCallback(() => {
+					app = new App();
+					app.init();
+				});
+			});
+
+			/**
+			 * Represents a single task node in the graph.
+			 */
+			class Task {
+				constructor(id, name, desc, x, y, isDoneByUser = false, days = 1) {
+					this.id = id;
+					this.name = name;
+					this.desc = desc;
+					this.x = x;
+					this.y = y;
+					this.days = days;
+					this.width = 180;
+					this.height = 90;
+					this.status = "pending"; // This is calculated and updated by the Logic module
+					this.isDoneByUser = isDoneByUser;
+				}
+
+				/** Checks if a point (x, y) is within the task's main body. */
+				contains(x, y) {
+					return x > this.x && x < this.x + this.width && y > this.y && y < this.y + this.height;
+				}
+
+				/** Checks if a click is on the top-right menu area. */
+				menuClicked(x, y) {
+					const menuHitArea = 25;
+					return x > this.x + this.width - menuHitArea && x < this.x + this.width && y > this.y && y < this.y + menuHitArea;
+				}
+
+				/** Checks if a click is on the bottom-right checkbox area. */
+				checkboxClicked(x, y) {
+					const checkboxHitArea = 35;
+					const checkboxX = this.x + this.width - checkboxHitArea;
+					const checkboxY = this.y + this.height - checkboxHitArea;
+					return x >= checkboxX && x <= checkboxX + checkboxHitArea && y >= checkboxY && y <= checkboxY + checkboxHitArea;
+				}
+			}
+
+			// --- MODULES ---------------------------------------------------------------- //
+
+			/**
+			 * CONFIG: Static configuration values for the application.
+			 */
+			const Config = {
+				STATUS_COLORS: {
+					blocked: { background: "#f8d7da", border: "#dc3545", text: "#dc3545" },
+					pending: { background: "#fff3cd", border: "#ffc107", text: "#ffc107" },
+					done: { background: "#d4edda", border: "#28a745", text: "#28a745" },
+				},
+				TEXT_COLOR: "#333",
+				COLUMN_SPACING: 250,
+				ROW_SPACING: 120,
+				CANVAS_PADDING_X: 50,
+				CANVAS_PADDING_Y: 100, // Increased top padding to avoid toolbar
+				STORAGE_KEY_STATE: "taskDepVizState_v2", // Updated key for new data structure
+				STORAGE_KEY_COACHMARK_DONE: "taskDepVizCoachmarkDone",
+				GANTT_OPTIONS: {
+					height: 275,
+					gantt: {
+						labelStyle: {
+							fontName: "Roboto Mono",
+							fontSize: 14,
+							color: "#000000",
+						},
+					},
+				},
+			};
+
+			/**
+			 * STATE: Manages the dynamic state of the application.
+			 */
+			const State = {
+				projects: {},
+				currentProjectId: null,
+				editingTask: null,
+				connectingFrom: null,
+				dragging: null,
+				mouse: { x: 0, y: 0 },
+				getCurrentProject() {
+					return this.projects[this.currentProjectId];
+				},
+				getTaskById(id) {
+					const currentProject = this.getCurrentProject();
+					if (!currentProject) return null;
+					return currentProject.tasks.find((t) => t.id === id);
+				},
+			};
+
+			/**
+			 * DOM: A single point of reference for all DOM elements.
+			 */
+			const DOM = {
+				canvas: document.getElementById("canvas"),
+				ctx: document.getElementById("canvas").getContext("2d"),
+				// Sidebar & Toolbar
+				sidebar: document.getElementById("sidebar"),
+				sidebarToggle: document.getElementById("sidebarToggle"),
+				toolbar: document.getElementById("toolbar"),
+				addTaskBtn: document.getElementById("addTask"),
+				arrangeBtn: document.getElementById("arrangeBtn"),
+				ganttBtn: document.getElementById("ganttBtn"),
+				projectStartDateInput: document.getElementById("projectStartDate"),
+				helpBtn: document.getElementById("helpBtn"),
+				// Project Management
+				projectSelector: document.getElementById("projectSelector"),
+				newProjectBtn: document.getElementById("newProjectBtn"),
+				renameProjectBtn: document.getElementById("renameProjectBtn"),
+				deleteProjectBtn: document.getElementById("deleteProjectBtn"),
+				// Task Modal
+				taskModal: document.getElementById("taskModal"),
+				taskNameInput: document.getElementById("taskName"),
+				taskDaysInput: document.getElementById("taskDays"),
+				taskDescInput: document.getElementById("taskDesc"),
+				taskDoneInput: document.getElementById("taskDone"),
+				saveTaskBtn: document.getElementById("saveTask"),
+				closeModalBtn: document.getElementById("closeModal"),
+				// Gantt Modal
+				ganttModal: document.getElementById("ganttModal"),
+				ganttChartDiv: document.getElementById("ganttChartDiv"),
+				closeGanttModalBtn: document.getElementById("closeGanttModal"),
+				// Node Menu
+				nodeMenu: document.getElementById("nodeMenu"),
+				editBtn: document.getElementById("editBtn"),
+				deleteBtn: document.getElementById("deleteBtn"),
+				// Coachmarks
+				coachmarkOverlay: document.getElementById("coachmark-overlay"),
+				coachmarkHighlight: document.getElementById("coachmark-highlight"),
+				coachmarkBox: document.getElementById("coachmark-box"),
+				coachmarkTitle: document.getElementById("coachmark-title"),
+				coachmarkText: document.getElementById("coachmark-text"),
+				coachmarkStepCounter: document.getElementById("coachmark-step-counter"),
+				coachmarkPrevBtn: document.getElementById("coachmark-prev"),
+				coachmarkNextBtn: document.getElementById("coachmark-next"),
+				coachmarkDoneBtn: document.getElementById("coachmark-done"),
+				coachmarkArrowSvg: document.getElementById("coachmark-arrow-svg"),
+				coachmarkArrowLine: document.getElementById("coachmark-arrow-line"),
+			};
+
+			/**
+			 * COACHMARKS: Handles the user feature tour.
+			 */
+			const Coachmarks = {
+				currentStep: 0,
+				steps: [
+					{
+						title: "Welcome!",
+						text: "Let's take a quick tour of the Task Dependency Visualizer. This will show you how to manage your project.",
+					},
+                    {
+                        element: "#projectSelector",
+                        title: "Toggle Between projects",
+                        text: "To switch to another project just click the dropdown and select the name of your project",
+                    },
+                    {
+                        element: "#newProjectBtn",
+                        title: "New Project",
+                        text: "Click the new button to create a new project. A project is simply a workspace where you can store each of your unqiue execution strategies",
+                    },
+					{
+						element: "#addTask",
+						title: "Add a Task",
+						text: "Click this button to create a new task. You'll be able to set its name, duration, and description.",
+					},
+					{
+						element: "#arrangeBtn",
+						title: "Arrange Tasks",
+						text: "After adding tasks and dependencies, click here to automatically organize them into a clean, logical layout.",
+					},
+					{
+						element: "#ganttBtn",
+						title: "Generate Gantt Chart",
+						text: "Visualize your project timeline by generating a Gantt chart. It uses task durations and dependencies to map everything out.",
+					},
+					{
+						element: "#projectStartDate",
+						title: "Set Project Start Date",
+						text: "This date is the starting point for the Gantt chart calculation. Make sure it's set correctly!",
+					},
+					{
+						isCanvas: true,
+						target: "firstTask",
+						title: "The Task Node",
+						text: "This is a task. You can drag it to move it. Its color indicates its status: pending (yellow), done (green), or blocked (red).",
+					},
+					{
+						isCanvas: true,
+						target: "firstTask",
+						title: "Create a Dependency",
+						text: "Double-click any task to start drawing a dependency arrow. Then, click on another task to complete the link.",
+					},
+					{
+						isCanvas: true,
+						target: "firstTaskCheckbox",
+						title: "Complete a Task",
+						text: "Click the checkbox to mark a task as done. This automatically updates the status of any tasks that depend on it.",
+					},
+					{
+						isCanvas: true,
+						target: "firstTaskMenu",
+						title: "Edit or Delete",
+						text: "Click the three dots in the top-right corner of a task to open a menu to edit its details or delete it entirely.",
+					},
+					
+					{
+						title: "You're All Set!",
+						text: "That's everything you need to know to get started. Enjoy managing your project!",
+					},
+				],
+
+				init() {
+					DOM.coachmarkNextBtn.onclick = () => this.next();
+					DOM.coachmarkPrevBtn.onclick = () => this.prev();
+					DOM.coachmarkDoneBtn.onclick = () => this.end();
+					DOM.helpBtn.onclick = () => this.start();
+				},
+
+				start() {
+					this.currentStep = 0;
+					DOM.coachmarkOverlay.style.display = "block";
+					this.showStep(this.currentStep);
+				},
+
+				end() {
+					DOM.coachmarkOverlay.style.display = "none";
+					localStorage.setItem(Config.STORAGE_KEY_COACHMARK_DONE, "true");
+					UI.collapseSidebar(); // Ensure sidebar is closed when tour ends.
+				},
+
+				next() {
+					if (this.currentStep < this.steps.length - 1) {
+						this.currentStep++;
+						this.showStep(this.currentStep);
+					}
+				},
+
+				prev() {
+					if (this.currentStep > 0) {
+						this.currentStep--;
+						this.showStep(this.currentStep);
+					}
+				},
+
+				getIntersectionPoint(rect, externalPointX, externalPointY) {
+					const { left, right, top, bottom, width, height } = rect;
+					const centerX = left + width / 2;
+					const centerY = top + height / 2;
+
+					const dx = externalPointX - centerX;
+					const dy = externalPointY - centerY;
+
+					const t_x = Math.abs(dx) > 0 ? (dx > 0 ? (right - centerX) / dx : (left - centerX) / dx) : Infinity;
+					const t_y = Math.abs(dy) > 0 ? (dy > 0 ? (bottom - centerY) / dy : (top - centerY) / dy) : Infinity;
+
+					const t = Math.min(t_x, t_y);
+
+					return {
+						x: centerX + t * dx,
+						y: centerY + t * dy,
+					};
+				},
+
+				showStep(index) {
+					const step = this.steps[index];
+					const { coachmarkHighlight, coachmarkBox, coachmarkTitle, coachmarkText, coachmarkArrowSvg, coachmarkArrowLine } = DOM;
+
+					const showStepContent = () => {
+						coachmarkTitle.textContent = step.title;
+						coachmarkText.textContent = step.text;
+						DOM.coachmarkStepCounter.textContent = `${index + 1} / ${this.steps.length}`;
+
+						DOM.coachmarkPrevBtn.style.display = index === 0 ? "none" : "inline-block";
+						DOM.coachmarkNextBtn.style.display = index === this.steps.length - 1 ? "none" : "inline-block";
+						DOM.coachmarkDoneBtn.style.display = index === this.steps.length - 1 ? "inline-block" : "none";
+
+						if (step.element || step.isCanvas) {
+							let targetRect;
+							if (step.isCanvas) {
+								const canvasRect = DOM.canvas.getBoundingClientRect();
+								const task = State.getCurrentProject()?.tasks[0];
+								if (!task) {
+									this.end();
+									alert("Please add a task to continue the tour.");
+									return;
+								}
+								let x = canvasRect.left + task.x,
+									y = canvasRect.top + task.y,
+									w = task.width,
+									h = task.height;
+								if (step.target === "firstTaskCheckbox") {
+									const area = 35;
+									x += task.width - area;
+									y += task.height - area;
+									w = h = area;
+								} else if (step.target === "firstTaskMenu") {
+									const area = 25;
+									x += task.width - area;
+									w = h = area;
+								}
+								targetRect = { top: y, left: x, width: w, height: h, right: x + w, bottom: y + h };
+							} else {
+								const targetElement = document.querySelector(step.element);
+								if (!targetElement) return this.end();
+								targetRect = targetElement.getBoundingClientRect();
+							}
+
+							coachmarkHighlight.style.top = `${targetRect.top - 5}px`;
+							coachmarkHighlight.style.left = `${targetRect.left - 5}px`;
+							coachmarkHighlight.style.width = `${targetRect.width + 10}px`;
+							coachmarkHighlight.style.height = `${targetRect.height + 10}px`;
+							coachmarkHighlight.style.display = "block";
+
+							const modalRect = coachmarkBox.getBoundingClientRect();
+							const targetCenterX = targetRect.left + targetRect.width / 2;
+							const targetCenterY = targetRect.bottom;
+							const startPoint = this.getIntersectionPoint(modalRect, targetCenterX, targetCenterY);
+
+							coachmarkArrowLine.setAttribute("x1", startPoint.x);
+							coachmarkArrowLine.setAttribute("y1", startPoint.y);
+							coachmarkArrowLine.setAttribute("x2", targetCenterX);
+							coachmarkArrowLine.setAttribute("y2", targetCenterY);
+							coachmarkArrowSvg.style.opacity = "1";
+						} else {
+							coachmarkHighlight.style.display = "none";
+							coachmarkArrowSvg.style.opacity = "0";
+						}
+					};
+
+					const targetElement = step.element ? document.querySelector(step.element) : null;
+					const isTargetInSidebar = targetElement && DOM.toolbar.contains(targetElement);
+					const isSidebarCollapsed = DOM.sidebar.classList.contains("collapsed");
+					let needsAnimationDelay = false;
+
+					if (isTargetInSidebar && isSidebarCollapsed) {
+						UI.expandSidebar();
+						needsAnimationDelay = true;
+					} else if (!isTargetInSidebar && !isSidebarCollapsed) {
+						UI.collapseSidebar();
+						needsAnimationDelay = true;
+					}
+
+					if (needsAnimationDelay) {
+						setTimeout(showStepContent, 350); // Wait for sidebar CSS transition
+					} else {
+						showStepContent(); // Show immediately
+					}
+				},
+			};
+
+			/**
+			 * LOGIC: Handles pure business logic and state calculations.
+			 */
+			const Logic = {
+				updateTaskStatuses() {
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					const MAX_ITERATIONS = project.tasks.length + 1;
+					for (let i = 0; i < MAX_ITERATIONS; i++) {
+						let hasChanged = false;
+						project.tasks.forEach((task) => {
+							const predecessors = project.dependencies.filter(([, to]) => to === task.id).map(([from]) => State.getTaskById(from));
+							const isBlocked = predecessors.some((p) => p && p.status !== "done");
+
+							let newStatus = "pending";
+							if (isBlocked) {
+								newStatus = "blocked";
+								if (task.isDoneByUser) {
+									task.isDoneByUser = false;
+									hasChanged = true;
+								}
+							} else if (task.isDoneByUser) {
+								newStatus = "done";
+							}
+
+							if (task.status !== newStatus) {
+								task.status = newStatus;
+								hasChanged = true;
+							}
+						});
+						if (!hasChanged) break;
+					}
+				},
+
+				createsCycle(fromId, toId) {
+					const project = State.getCurrentProject();
+					if (!project) return false;
+
+					const stack = [toId];
+					const visited = new Set([toId]);
+					while (stack.length > 0) {
+						const currentId = stack.pop();
+						if (currentId === fromId) return true;
+
+						const neighbors = project.dependencies.filter(([f]) => f === currentId).map(([, t]) => t);
+						for (const neighborId of neighbors) {
+							if (!visited.has(neighborId)) {
+								visited.add(neighborId);
+								stack.push(neighborId);
+							}
+						}
+					}
+					return false;
+				},
+
+				calculateRanks() {
+					const project = State.getCurrentProject();
+					const rankMap = new Map();
+					if (!project) return rankMap;
+
+					project.tasks.forEach((task) => rankMap.set(task.id, 0));
+
+					for (let i = 0; i < project.tasks.length; i++) {
+						project.tasks.forEach((task) => {
+							const predecessors = project.dependencies.filter(([, to]) => to === task.id).map(([from]) => from);
+							if (predecessors.length > 0) {
+								const maxPredecessorRank = Math.max(...predecessors.map((id) => rankMap.get(id) || 0));
+								rankMap.set(task.id, maxPredecessorRank + 1);
+							}
+						});
+					}
+					return rankMap;
+				},
+
+				calculateTaskSchedule() {
+					const project = State.getCurrentProject();
+					if (!project || project.tasks.length === 0) return [];
+
+					const userStartDate = project.startDate;
+					const projectStartDate = userStartDate ? new Date(userStartDate + "T00:00:00") : new Date();
+					projectStartDate.setHours(0, 0, 0, 0);
+
+					const taskDataMap = new Map();
+					project.tasks.forEach((task) => {
+						taskDataMap.set(task.id, {
+							task: task,
+							earliestStartMs: projectStartDate.getTime(),
+							durationMs: task.days * 24 * 3600 * 1000,
+							endMs: 0,
+						});
+					});
+
+					const sortedTasks = [...project.tasks].sort((a, b) => this.calculateRanks().get(a.id) - this.calculateRanks().get(b.id));
+
+					sortedTasks.forEach((task) => {
+						const taskInfo = taskDataMap.get(task.id);
+						const predecessors = project.dependencies.filter(([, to]) => to === task.id).map(([from]) => from);
+						let latestPredecessorEndMs = projectStartDate.getTime();
+
+						predecessors.forEach((predId) => {
+							const predInfo = taskDataMap.get(predId);
+							if (predInfo) {
+								latestPredecessorEndMs = Math.max(latestPredecessorEndMs, predInfo.endMs);
+							}
+						});
+
+						taskInfo.earliestStartMs = latestPredecessorEndMs;
+						taskInfo.endMs = taskInfo.earliestStartMs + taskInfo.durationMs;
+					});
+
+					return Array.from(taskDataMap.values()).map((info) => [
+						String(info.task.id),
+						info.task.name,
+						new Date(info.earliestStartMs),
+						new Date(info.endMs),
+						null,
+						info.task.status === "done" ? 100 : 0,
+						project.dependencies
+							.filter(([, to]) => to === info.task.id)
+							.map(([from]) => String(from))
+							.join(","),
+					]);
+				},
+			};
+
+			/**
+			 * RENDERER: Handles all drawing operations on the canvas.
+			 */
+			const Renderer = {
+				init() {
+					CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+						if (w < 2 * r) r = w / 2;
+						if (h < 2 * r) r = h / 2;
+						this.beginPath();
+						this.moveTo(x + r, y);
+						this.arcTo(x + w, y, x + w, y + h, r);
+						this.arcTo(x + w, y + h, x, y + h, r);
+						this.arcTo(x, y + h, x, y, r);
+						this.arcTo(x, y, x + w, y, r);
+						this.closePath();
+						return this;
+					};
+				},
+
+				draw() {
+					const { ctx, canvas } = DOM;
+					ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+					const project = State.getCurrentProject();
+					if (!project) return; // Don't draw if no project is active
+
+					this._drawDependencies();
+					if (State.connectingFrom && State.mouse) {
+						this._drawConnectingLine();
+					}
+					this._drawTasks();
+				},
+
+				_drawTasks() {
+					State.getCurrentProject().tasks.forEach((task) => {
+						const { ctx } = DOM;
+						const colors = Config.STATUS_COLORS[task.status];
+
+						ctx.shadowColor = "rgba(0,0,0,0.2)";
+						ctx.shadowBlur = 8;
+						ctx.shadowOffsetY = 4;
+						ctx.shadowOffsetX = 0;
+						ctx.fillStyle = colors.background;
+						ctx.strokeStyle = colors.border;
+						ctx.lineWidth = 2.5;
+						ctx.roundRect(task.x, task.y, task.width, task.height, 10).fill();
+						ctx.roundRect(task.x, task.y, task.width, task.height, 10).stroke();
+						ctx.shadowColor = "transparent";
+
+						ctx.fillStyle = Config.TEXT_COLOR;
+						ctx.font = "bold 14px 'JetBrains Mono', monospace";
+						ctx.fillText(task.name, task.x + 12, task.y + 28);
+						ctx.fillStyle = "#555";
+						ctx.font = "11px 'JetBrains Mono', monospace";
+						ctx.fillText(`${task.days}d`, task.x + 12, task.y + 45);
+
+						const statusText = task.status.toUpperCase();
+						ctx.font = "bold 10px 'JetBrains Mono', monospace";
+						const statusMetrics = ctx.measureText(statusText);
+						const tagPadding = 6;
+						const tagWidth = statusMetrics.width + tagPadding * 2;
+						const tagHeight = 18;
+						const tagX = task.x + 10;
+						const tagY = task.y + task.height - 10 - tagHeight;
+						ctx.fillStyle = colors.border;
+						ctx.roundRect(tagX, tagY, tagWidth, tagHeight, 4).fill();
+						ctx.fillStyle = colors.background;
+						ctx.fillText(statusText, tagX + tagPadding, tagY + 12);
+
+						this._drawCheckbox(task, colors);
+
+						const menuX = task.x + task.width - 15;
+						ctx.fillStyle = "#6c757d";
+						for (let i = 0; i < 3; i++) {
+							ctx.beginPath();
+							ctx.arc(menuX, task.y + 12 + i * 5, 1.5, 0, Math.PI * 2);
+							ctx.fill();
+						}
+					});
+				},
+
+				_drawCheckbox(task, colors) {
+					const { ctx } = DOM;
+					const checkboxX = task.x + task.width - 30;
+					const checkboxY = task.y + task.height - 30;
+					const size = 16;
+					ctx.strokeStyle = colors.border;
+
+					if (task.status === "blocked") {
+						ctx.lineWidth = 2;
+						ctx.beginPath();
+						ctx.moveTo(checkboxX + 3, checkboxY + 3);
+						ctx.lineTo(checkboxX + size - 3, checkboxY + size - 3);
+						ctx.moveTo(checkboxX + size - 3, checkboxY + 3);
+						ctx.lineTo(checkboxX + 3, checkboxY + size - 3);
+						ctx.stroke();
+					} else {
+						ctx.lineWidth = 1.5;
+						ctx.beginPath();
+						ctx.roundRect(checkboxX, checkboxY, size, size, 3).stroke();
+						if (task.isDoneByUser) {
+							ctx.lineWidth = 2.5;
+							ctx.beginPath();
+							ctx.moveTo(checkboxX + 3, checkboxY + size * 0.55);
+							ctx.lineTo(checkboxX + size * 0.4, checkboxY + size * 0.8);
+							ctx.lineTo(checkboxX + size * 0.9, checkboxY + size * 0.2);
+							ctx.stroke();
+						}
+					}
+				},
+
+				_drawDependencies() {
+					State.getCurrentProject().dependencies.forEach(([fromId, toId]) => {
+						const from = State.getTaskById(fromId);
+						const to = State.getTaskById(toId);
+						if (!from || !to) return;
+
+						const fromX = from.x + from.width;
+						const fromY = from.y + from.height / 2;
+						const toX = to.x;
+						const toY = to.y + to.height / 2;
+						const color = Config.STATUS_COLORS[to.status]?.border || "#555";
+						this._drawArrow(fromX, fromY, toX, toY, color);
+					});
+				},
+
+				_drawConnectingLine() {
+					const from = State.getTaskById(State.connectingFrom);
+					if (from) {
+						const fromX = from.x + from.width;
+						const fromY = from.y + from.height / 2;
+						this._drawArrow(fromX, fromY, State.mouse.x, State.mouse.y, "#555", true);
+					}
+				},
+
+				_drawArrow(x1, y1, x2, y2, color, dashed = false) {
+					const { ctx } = DOM;
+					ctx.beginPath();
+					ctx.setLineDash(dashed ? [5, 5] : []);
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 3;
+
+					const dx = x2 - x1;
+					ctx.moveTo(x1, y1);
+					ctx.bezierCurveTo(x1 + dx * 0.5, y1, x2 - dx * 0.5, y2, x2, y2);
+					ctx.stroke();
+
+					const angle = Math.atan2(y2 - y1, x2 - x1);
+					const length = 10;
+					ctx.beginPath();
+					ctx.moveTo(x2, y2);
+					ctx.lineTo(x2 - length * Math.cos(angle - 0.3), y2 - length * Math.sin(angle - 0.3));
+					ctx.lineTo(x2 - length * Math.cos(angle + 0.3), y2 - length * Math.sin(angle + 0.3));
+					ctx.closePath();
+					ctx.fillStyle = color;
+					ctx.fill();
+					ctx.setLineDash([]);
+				},
+			};
+
+			/**
+			 * UI: Manages interactions with DOM elements like modals and menus.
+			 */
+			const UI = {
+				toggleSidebar() {
+					DOM.sidebar.classList.toggle("collapsed");
+					if (DOM.sidebar.classList.contains("collapsed")) {
+						DOM.sidebarToggle.innerHTML = "&lt;";
+					} else {
+						DOM.sidebarToggle.innerHTML = "&gt;";
+					}
+				},
+				expandSidebar() {
+					if (DOM.sidebar.classList.contains("collapsed")) {
+						DOM.sidebar.classList.remove("collapsed");
+						DOM.sidebarToggle.innerHTML = "&gt;";
+					}
+				},
+				collapseSidebar() {
+					if (!DOM.sidebar.classList.contains("collapsed")) {
+						DOM.sidebar.classList.add("collapsed");
+						DOM.sidebarToggle.innerHTML = "&lt;";
+					}
+				},
+
+				populateProjectSelector() {
+					DOM.projectSelector.innerHTML = "";
+					for (const id in State.projects) {
+						const project = State.projects[id];
+						const option = document.createElement("option");
+						option.value = id;
+						option.textContent = project.name;
+						DOM.projectSelector.appendChild(option);
+					}
+					DOM.projectSelector.value = State.currentProjectId;
+				},
+
+				updateProjectUI() {
+					const project = State.getCurrentProject();
+					if (project) {
+						DOM.projectStartDateInput.value = project.startDate;
+					}
+					this.populateProjectSelector();
+					app.fullUpdateAndRender();
+				},
+
+				showTaskModal(task = null) {
+					State.editingTask = task;
+					if (task) {
+						DOM.taskNameInput.value = task.name;
+						DOM.taskDescInput.value = task.desc;
+						DOM.taskDaysInput.value = task.days;
+						DOM.taskDoneInput.checked = task.isDoneByUser;
+					} else {
+						DOM.taskNameInput.value = "";
+						DOM.taskDescInput.value = "";
+						DOM.taskDaysInput.value = 1;
+						DOM.taskDoneInput.checked = false;
+					}
+					DOM.taskModal.style.display = "block";
+					DOM.taskNameInput.focus();
+				},
+
+				hideTaskModal() {
+					DOM.taskModal.style.display = "none";
+				},
+
+				showNodeMenu(task, x, y) {
+					DOM.nodeMenu.style.display = "flex";
+					const menuWidth = DOM.nodeMenu.offsetWidth;
+					DOM.nodeMenu.style.left = x + menuWidth > window.innerWidth ? `${x - menuWidth}px` : `${x}px`;
+					DOM.nodeMenu.style.top = `${y}px`;
+
+					DOM.editBtn.onclick = () => app.startEditTask(task);
+					DOM.deleteBtn.onclick = () => app.deleteTask(task.id);
+				},
+
+				hideNodeMenu() {
+					DOM.nodeMenu.style.display = "none";
+				},
+
+				showGanttModal() {
+					DOM.ganttModal.style.display = "flex";
+					const ganttData = Logic.calculateTaskSchedule();
+
+					if (ganttData.length === 0) {
+						DOM.ganttChartDiv.innerHTML = "<p>No tasks to display in the chart.</p>";
+						return;
+					}
+
+					const dataTable = new google.visualization.DataTable();
+					dataTable.addColumn("string", "Task ID");
+					dataTable.addColumn("string", "Task Name");
+					dataTable.addColumn("date", "Start Date");
+					dataTable.addColumn("date", "End Date");
+					dataTable.addColumn("number", "Duration (ms)");
+					dataTable.addColumn("number", "Percent Complete");
+					dataTable.addColumn("string", "Dependencies");
+					dataTable.addRows(ganttData);
+
+					const rowHeight = 41;
+					const chartHeight = ganttData.length * rowHeight + 50;
+
+					const options = {
+						height: Math.max(chartHeight, 200),
+						gantt: {
+							trackHeight: 30,
+							barHeight: 20,
+							criticalPathEnabled: true,
+							criticalPathStyle: { stroke: "#e64a19", strokeWidth: 5 },
+							arrow: { angle: 100, width: 2, color: "#555", radius: 0 },
+						},
+					};
+
+					const chart = new google.visualization.Gantt(DOM.ganttChartDiv, Config.GANTT_OPTIONS);
+					chart.draw(dataTable, options);
+				},
+
+				hideGanttModal() {
+					DOM.ganttModal.style.display = "none";
+					DOM.ganttChartDiv.innerHTML = "";
+				},
+			};
+
+			/**
+			 * APP: The main controller that wires everything together.
+			 */
+			class App {
+				constructor() {
+					this.offsetX = 0;
+					this.offsetY = 0;
+				}
+
+				init() {
+					DOM.canvas.width = window.innerWidth;
+					DOM.canvas.height = window.innerHeight;
+
+					Renderer.init();
+					Coachmarks.init();
+					this.setupEventListeners();
+					this.loadState(); // Load from localStorage or create default project
+					UI.updateProjectUI(); // Populate selector and render canvas
+
+					// Show coachmarks on first visit
+					if (!localStorage.getItem(Config.STORAGE_KEY_COACHMARK_DONE)) {
+						setTimeout(() => Coachmarks.start(), 500);
+					}
+				}
+
+				saveState() {
+					const stateToSave = {
+						projects: State.projects,
+						currentProjectId: State.currentProjectId,
+					};
+					localStorage.setItem(Config.STORAGE_KEY_STATE, JSON.stringify(stateToSave));
+				}
+
+				loadState() {
+					const savedStateJSON = localStorage.getItem(Config.STORAGE_KEY_STATE);
+					if (savedStateJSON) {
+						try {
+							const savedState = JSON.parse(savedStateJSON);
+							State.projects = savedState.projects || {};
+							State.currentProjectId = savedState.currentProjectId;
+
+							// Re-instantiate Task objects to ensure they have methods
+							for (const projectId in State.projects) {
+								const project = State.projects[projectId];
+								project.tasks = project.tasks.map(
+									(taskData) => new Task(taskData.id, taskData.name, taskData.desc, taskData.x, taskData.y, taskData.isDoneByUser, taskData.days)
+								);
+							}
+
+							// If the saved current project ID doesn't exist anymore, pick the first one
+							if (!State.projects[State.currentProjectId]) {
+								State.currentProjectId = Object.keys(State.projects)[0] || null;
+							}
+						} catch (e) {
+							console.error("Failed to parse saved state:", e);
+							this.loadDefaultProject();
+						}
+					}
+
+					// If no projects exist after loading, create a default one
+					if (Object.keys(State.projects).length === 0) {
+						this.loadDefaultProject();
+					}
+				}
+
+				loadDefaultProject() {
+					const id = `proj_${Date.now()}`;
+					const defaultProject = {
+						id: id,
+						name: "My First Project",
+						tasks: [],
+						dependencies: [],
+						startDate: new Date().toISOString().split("T")[0],
+					};
+
+					// Y-coordinates are shifted down to avoid the toolbar
+					defaultProject.tasks.push(new Task(1, "Plan Project", "Define scope.", 100, 250, true, 5));
+					defaultProject.tasks.push(new Task(2, "Design UI/UX", "Create mockups.", 350, 150, false, 8));
+					defaultProject.tasks.push(new Task(3, "Setup Database", "Configure schema.", 350, 350, false, 4));
+					defaultProject.tasks.push(new Task(4, "Develop Frontend", "Build UI.", 600, 250, false, 12));
+					defaultProject.dependencies.push([1, 2], [1, 3], [2, 4], [3, 4]);
+
+					State.projects = { [id]: defaultProject };
+					State.currentProjectId = id;
+				}
+
+				fullUpdateAndRender() {
+					Logic.updateTaskStatuses();
+					Renderer.draw();
+				}
+
+				setupEventListeners() {
+					DOM.sidebarToggle.onclick = () => UI.toggleSidebar();
+					DOM.addTaskBtn.onclick = () => UI.showTaskModal();
+					DOM.arrangeBtn.onclick = () => this.arrangeTasks();
+					DOM.ganttBtn.onclick = () => UI.showGanttModal();
+					DOM.deleteProjectBtn.onclick = () => this.deleteProject();
+
+					// Project Management Listeners
+					DOM.newProjectBtn.onclick = () => this.createNewProject();
+					DOM.renameProjectBtn.onclick = () => this.renameProject();
+					DOM.projectSelector.onchange = (e) => this.switchProject(e.target.value);
+					DOM.projectStartDateInput.onchange = (e) => this.updateProjectStartDate(e.target.value);
+
+					DOM.saveTaskBtn.onclick = () => this.saveTask();
+					DOM.closeModalBtn.onclick = () => UI.hideTaskModal();
+					DOM.closeGanttModalBtn.onclick = () => UI.hideGanttModal();
+					window.onresize = () => {
+						DOM.canvas.width = window.innerWidth;
+						DOM.canvas.height = window.innerHeight;
+						this.fullUpdateAndRender();
+					};
+
+					DOM.canvas.addEventListener("mousedown", this.handleMouseDown.bind(this));
+					DOM.canvas.addEventListener("mousemove", this.handleMouseMove.bind(this));
+					DOM.canvas.addEventListener("mouseup", this.handleMouseUp.bind(this));
+					DOM.canvas.addEventListener("dblclick", this.handleDoubleClick.bind(this));
+					DOM.canvas.addEventListener("click", this.handleClick.bind(this));
+				}
+
+				// --- Action Handlers ---
+
+				createNewProject() {
+					const name = prompt("Enter new project name:");
+					if (!name || name.trim() === "") return;
+
+					const id = `proj_${Date.now()}`;
+					State.projects[id] = {
+						id: id,
+						name: name.trim(),
+						tasks: [],
+						dependencies: [],
+						startDate: new Date().toISOString().split("T")[0],
+					};
+					this.switchProject(id);
+				}
+
+				renameProject() {
+					const project = State.getCurrentProject();
+					if (!project) return;
+					const newName = prompt("Enter new name for project:", project.name);
+					if (newName && newName.trim() !== "") {
+						project.name = newName.trim();
+						UI.updateProjectUI();
+						this.saveState();
+					}
+				}
+
+				deleteProject() {
+					const project = State.getCurrentProject();
+					if (!project) return;
+					if (confirm(`Are you sure you want to delete the project "${project.name}"? This cannot be undone.`)) {
+						delete State.projects[State.currentProjectId];
+						const remainingProjectIds = Object.keys(State.projects);
+						if (remainingProjectIds.length > 0) {
+							this.switchProject(remainingProjectIds[0]);
+						} else {
+							this.loadDefaultProject();
+							UI.updateProjectUI();
+						}
+						this.saveState();
+					}
+				}
+
+				switchProject(projectId) {
+					State.currentProjectId = projectId;
+					UI.updateProjectUI();
+					this.saveState();
+				}
+
+				updateProjectStartDate(date) {
+					const project = State.getCurrentProject();
+					if (project) {
+						project.startDate = date;
+						this.saveState();
+					}
+				}
+
+				saveTask() {
+					const name = DOM.taskNameInput.value.trim();
+					if (!name) return;
+
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					const isDuplicate = project.tasks.some((t) => t.name.toLowerCase() === name.toLowerCase() && t !== State.editingTask);
+					if (isDuplicate) {
+						alert("A task with this name already exists in this project.");
+						return;
+					}
+
+					const desc = DOM.taskDescInput.value.trim();
+					const days = parseFloat(DOM.taskDaysInput.value) || 1;
+					const isDone = DOM.taskDoneInput.checked;
+
+					if (State.editingTask) {
+						State.editingTask.name = name;
+						State.editingTask.desc = desc;
+						State.editingTask.days = days;
+						State.editingTask.isDoneByUser = isDone;
+					} else {
+						// Use new padding for Y-coordinate
+						const x = Config.CANVAS_PADDING_X + (project.tasks.length % 5) * Config.COLUMN_SPACING;
+						const y = Config.CANVAS_PADDING_Y + Math.floor(project.tasks.length / 5) * Config.ROW_SPACING;
+						const newTask = new Task(Date.now(), name, desc, x, y, isDone, days);
+						project.tasks.push(newTask);
+					}
+
+					UI.hideTaskModal();
+					this.saveState();
+					this.fullUpdateAndRender();
+				}
+
+				startEditTask(task) {
+					UI.hideNodeMenu();
+					UI.showTaskModal(task);
+				}
+
+				deleteTask(taskId) {
+					const project = State.getCurrentProject();
+					if (!project) return;
+					project.tasks = project.tasks.filter((t) => t.id !== taskId);
+					project.dependencies = project.dependencies.filter(([f, t]) => f !== taskId && t !== taskId);
+					UI.hideNodeMenu();
+					this.saveState();
+					this.fullUpdateAndRender();
+				}
+
+				arrangeTasks() {
+					const project = State.getCurrentProject();
+					if (!project || project.tasks.length === 0) return;
+
+					const rankMap = Logic.calculateRanks();
+
+					const columns = new Map();
+					rankMap.forEach((rank, taskId) => {
+						if (!columns.has(rank)) columns.set(rank, []);
+						columns.get(rank).push(State.getTaskById(taskId));
+					});
+
+					columns.forEach((tasksInCol, colIndex) => {
+						tasksInCol.sort((a, b) => a.y - b.y);
+						tasksInCol.forEach((task, rowIndex) => {
+							// Use new padding values for both X and Y
+							task.x = Config.CANVAS_PADDING_X + colIndex * Config.COLUMN_SPACING;
+							task.y = Config.CANVAS_PADDING_Y + rowIndex * Config.ROW_SPACING;
+						});
+					});
+
+					this.saveState();
+					this.fullUpdateAndRender();
+				}
+
+				_getMousePos(e) {
+					const rect = DOM.canvas.getBoundingClientRect();
+					return {
+						x: e.clientX - rect.left,
+						y: e.clientY - rect.top,
+					};
+				}
+
+				handleClick(e) {
+					const pos = this._getMousePos(e);
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					for (const task of project.tasks) {
+						if (task.checkboxClicked(pos.x, pos.y) && task.status !== "blocked") {
+							task.isDoneByUser = !task.isDoneByUser;
+							if (!task.isDoneByUser) {
+								const uncheckDependents = (taskId) => {
+									project.dependencies
+										.filter(([from]) => from === taskId)
+										.forEach(([, toId]) => {
+											const dependent = State.getTaskById(toId);
+											if (dependent && dependent.isDoneByUser) {
+												dependent.isDoneByUser = false;
+												uncheckDependents(dependent.id);
+											}
+										});
+								};
+								uncheckDependents(task.id);
+							}
+							this.saveState();
+							this.fullUpdateAndRender();
+							return;
+						}
+					}
+				}
+
+				handleMouseDown(e) {
+					const pos = this._getMousePos(e);
+					UI.hideNodeMenu();
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					for (const task of [...project.tasks].reverse()) {
+						if (task.contains(pos.x, pos.y)) {
+							if (task.menuClicked(pos.x, pos.y)) {
+								UI.showNodeMenu(task, e.clientX, e.clientY);
+								return;
+							}
+							if (task.checkboxClicked(pos.x, pos.y)) {
+								return;
+							}
+							State.dragging = task;
+							this.offsetX = pos.x - task.x;
+							this.offsetY = pos.y - task.y;
+							return;
+						}
+					}
+				}
+
+				handleMouseMove(e) {
+					const pos = this._getMousePos(e);
+					State.mouse = pos;
+
+					if (State.dragging) {
+						State.dragging.x = pos.x - this.offsetX;
+						State.dragging.y = pos.y - this.offsetY;
+						Renderer.draw();
+					} else if (State.connectingFrom) {
+						Renderer.draw();
+					}
+				}
+
+				handleMouseUp(e) {
+					let stateChanged = false;
+					if (State.dragging) {
+						stateChanged = true;
+					}
+
+					const project = State.getCurrentProject();
+					if (State.connectingFrom && project) {
+						const pos = this._getMousePos(e);
+						const target = project.tasks.find((t) => t.contains(pos.x, pos.y));
+						if (target && target.id !== State.connectingFrom) {
+							if (Logic.createsCycle(State.connectingFrom, target.id)) {
+								alert("This dependency would create a cycle and is not allowed.");
+							} else {
+								const exists = project.dependencies.some(([f, t]) => f === State.connectingFrom && t === target.id);
+								if (!exists) {
+									project.dependencies.push([State.connectingFrom, target.id]);
+									stateChanged = true;
+								}
+							}
+						}
+						State.connectingFrom = null;
+						this.fullUpdateAndRender(); // Redraw immediately after connecting
+					}
+					State.dragging = null;
+
+					if (stateChanged) {
+						this.saveState();
+					}
+				}
+
+				handleDoubleClick(e) {
+					const pos = this._getMousePos(e);
+					const project = State.getCurrentProject();
+					if (!project) return;
+					const clickedTask = project.tasks.find((t) => t.contains(pos.x, pos.y));
+					if (clickedTask) {
+						State.connectingFrom = clickedTask.id;
+					}
+				}
+			}
+		</script>
+	</body>
+</html>
