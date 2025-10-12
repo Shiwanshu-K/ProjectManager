@@ -3,6 +3,18 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta property="og:title" content="Visual Project Manager — Plan Smarter" />
+		<meta property="og:description" content="Visualize your project tasks and dependencies with this interactive Gantt-based project manager." />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://shiwanshu-k.github.io/ProjectManager/" />
+		<meta property="og:image" content="https://shiwanshu-k.github.io/ProjectManager/assets/preview.png" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Visual Project Manager — Plan Smarter" />
+		<meta name="twitter:description" content="Interactive Gantt-based project planner to visualize bottlenecks and timelines." />
+		<meta name="twitter:image" content="https://shiwanshu-k.github.io/ProjectManager/assets/preview.png" />
+		<link rel="preconnect" href="https://www.gstatic.com" />
+		<link rel="dns-prefetch" href="https://www.gstatic.com" />
 		<title>Project Manager to visualise your bottlenecks</title>
 		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 		<style>
@@ -461,6 +473,13 @@
 				</div>
 			</div>
 		</div>
+
+		<section id="app-description" style="display: none">
+			<p>
+				This project management web app lets users visualize project dependencies and timelines through an interactive graph and Gantt chart generator. Users can add, edit, and organize tasks
+				to identify workflow bottlenecks and optimize delivery schedules.
+			</p>
+		</section>
 		<script type="module">
 			// Import the functions you need from the SDKs you need
 			import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
@@ -649,16 +668,16 @@
 						title: "Welcome!",
 						text: "Let's take a quick tour of the Task Dependency Visualizer. This will show you how to manage your project.",
 					},
-                    {
-                        element: "#projectSelector",
-                        title: "Toggle Between projects",
-                        text: "To switch to another project just click the dropdown and select the name of your project",
-                    },
-                    {
-                        element: "#newProjectBtn",
-                        title: "New Project",
-                        text: "Click the new button to create a new project. A project is simply a workspace where you can store each of your unqiue execution strategies",
-                    },
+					{
+						element: "#projectSelector",
+						title: "Toggle Between projects",
+						text: "To switch to another project just click the dropdown and select the name of your project",
+					},
+					{
+						element: "#newProjectBtn",
+						title: "New Project",
+						text: "Click the new button to create a new project. A project is simply a workspace where you can store each of your unqiue execution strategies",
+					},
 					{
 						element: "#addTask",
 						title: "Add a Task",
@@ -703,7 +722,7 @@
 						title: "Edit or Delete",
 						text: "Click the three dots in the top-right corner of a task to open a menu to edit its details or delete it entirely.",
 					},
-					
+
 					{
 						title: "You're All Set!",
 						text: "That's everything you need to know to get started. Enjoy managing your project!",
@@ -1303,9 +1322,7 @@
 							// Re-instantiate Task objects to ensure they have methods
 							for (const projectId in State.projects) {
 								const project = State.projects[projectId];
-								project.tasks = project.tasks.map(
-									(taskData) => new Task(taskData.id, taskData.name, taskData.desc, taskData.x, taskData.y, taskData.isDoneByUser, taskData.days)
-								);
+								project.tasks = project.tasks.map((taskData) => new Task(taskData.id, taskData.name, taskData.desc, taskData.x, taskData.y, taskData.isDoneByUser, taskData.days));
 							}
 
 							// If the saved current project ID doesn't exist anymore, pick the first one
