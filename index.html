@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<meta charset="UTF-8" />
+		<meta charset="UTF-M-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta property="og:title" content="Visual Project Manager — Plan Smarter" />
 		<meta property="og:description" content="Visualize your project tasks and dependencies with this interactive Gantt-based project manager." />
@@ -165,6 +165,13 @@
 			#renameProjectBtn:hover {
 				background: #e0a800;
 			}
+			/* --- Added for the new checkbox --- */
+			.toolbar-checkbox-wrapper {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 5px 0;
+			}
 			/* --- Modal Styling --- */
 			.modal {
 				display: none;
@@ -273,6 +280,14 @@
 			#closeGanttModal {
 				background: #6c757d;
 				color: white;
+			}
+			
+			#exportGanttCsvBtn {
+				background: #28a745;
+				color: white;
+			}
+			#exportGanttCsvBtn:hover {
+				background: #218838;
 			}
 
 			#ganttChartDiv {
@@ -417,6 +432,10 @@
 				<button id="addTask" class="btn">+ Add Task</button>
 				<button id="arrangeBtn" class="btn">Arrange</button>
 				<button id="ganttBtn" class="btn">Generate Gantt</button>
+				<div class="toolbar-checkbox-wrapper">
+					<input type="checkbox" id="excludeWeekends" checked />
+					<label for="excludeWeekends" class="toolbar-label" style="font-weight: normal; cursor: pointer;">Exclude Weekends</label>
+				</div>
 				<div class="toolbar-group">
 					<label for="projectStartDate" class="toolbar-label">Project Start Date:</label>
 					<input type="date" id="projectStartDate" class="toolbar-item" />
@@ -433,6 +452,7 @@
 				<h2>Project Gantt Chart</h2>
 				<div id="ganttChartDiv"></div>
 				<div class="modal-footer">
+					<button id="exportGanttCsvBtn">Export CSV</button>
 					<button id="closeGanttModal">Close</button>
 				</div>
 			</div>
@@ -640,6 +660,8 @@
 				ganttModal: document.getElementById("ganttModal"),
 				ganttChartDiv: document.getElementById("ganttChartDiv"),
 				closeGanttModalBtn: document.getElementById("closeGanttModal"),
+				exportGanttCsvBtn: document.getElementById("exportGanttCsvBtn"),
+				excludeWeekendsCheckbox: document.getElementById("excludeWeekends"), // New line
 				// Node Menu
 				nodeMenu: document.getElementById("nodeMenu"),
 				editBtn: document.getElementById("editBtn"),
@@ -943,9 +965,30 @@
 					return rankMap;
 				},
 
+				calculateEndDateIgnoringWeekends(startDate, durationInDays) {
+					let currentDate = new Date(startDate.getTime());
+					// Round up to handle partial days and ensure task finishes.
+					let remainingDays = Math.ceil(durationInDays);
+					if (remainingDays <= 0) return currentDate;
+
+					// The start day itself counts as the first day of work.
+					let daysToAdvance = 0;
+					// We loop until we have advanced the required number of business days PAST the start date.
+					while (daysToAdvance < remainingDays - 1) { // -1 because the start day is day 1
+						currentDate.setDate(currentDate.getDate() + 1);
+						let dayOfWeek = currentDate.getDay();
+						if (dayOfWeek !== 0 && dayOfWeek !== 6) { // If it's a weekday
+							daysToAdvance++;
+						}
+					}
+					return currentDate;
+				},
+
 				calculateTaskSchedule() {
 					const project = State.getCurrentProject();
 					if (!project || project.tasks.length === 0) return [];
+
+					const excludeWeekends = DOM.excludeWeekendsCheckbox.checked; // Read the checkbox state
 
 					const userStartDate = project.startDate;
 					const projectStartDate = userStartDate ? new Date(userStartDate + "T00:00:00") : new Date();
@@ -975,8 +1018,34 @@
 							}
 						});
 
-						taskInfo.earliestStartMs = latestPredecessorEndMs;
-						taskInfo.endMs = taskInfo.earliestStartMs + taskInfo.durationMs;
+						let startDate = new Date(latestPredecessorEndMs);
+
+						if (excludeWeekends) {
+							// If a predecessor exists, the next task starts the following day.
+							if (predecessors.length > 0) {
+								 startDate.setDate(startDate.getDate() + 1);
+							}
+
+							// Adjust the start date to the next available business day
+							let dayOfWeek = startDate.getDay();
+							if (dayOfWeek === 6) { // Saturday
+								startDate.setDate(startDate.getDate() + 2);
+							} else if (dayOfWeek === 0) { // Sunday
+								startDate.setDate(startDate.getDate() + 1);
+							}
+						}
+						
+						taskInfo.earliestStartMs = startDate.getTime();
+
+						let endDate;
+						if (excludeWeekends) {
+							endDate = this.calculateEndDateIgnoringWeekends(startDate, task.days);
+						} else {
+							// Original logic: add raw duration in milliseconds.
+							endDate = new Date(taskInfo.earliestStartMs + taskInfo.durationMs - 1); // Subtract 1ms to not spill into the next day
+						}
+
+						taskInfo.endMs = endDate.getTime();
 					});
 
 					return Array.from(taskDataMap.values()).map((info) => [
@@ -1383,6 +1452,7 @@
 					DOM.saveTaskBtn.onclick = () => this.saveTask();
 					DOM.closeModalBtn.onclick = () => UI.hideTaskModal();
 					DOM.closeGanttModalBtn.onclick = () => UI.hideGanttModal();
+					DOM.exportGanttCsvBtn.onclick = () => this.exportGanttToCSV();
 					window.onresize = () => {
 						DOM.canvas.width = window.innerWidth;
 						DOM.canvas.height = window.innerHeight;
@@ -1397,6 +1467,65 @@
 				}
 
 				// --- Action Handlers ---
+
+				exportGanttToCSV() {
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					const ganttData = Logic.calculateTaskSchedule();
+					if (ganttData.length === 0) {
+						alert("No task data available to export.");
+						return;
+					}
+
+					const headers = ["Task Name", "Start Date", "End Date", "Duration (days)", "Status", "Dependencies"];
+
+					// Helper to safely format CSV fields
+					const formatCsvField = (field) => {
+						const str = String(field);
+						// If the field contains a comma, double quote, or newline, wrap it in double quotes.
+						// Also, any double quotes within the field must be escaped by another double quote.
+						if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+							return `"${str.replace(/"/g, '""')}"`;
+						}
+						return str;
+					};
+
+					const rows = ganttData.map((row) => {
+						const taskId = row[0];
+						const taskName = row[1];
+						const startDate = new Date(row[2]).toISOString().split("T")[0];
+						const endDate = new Date(row[3]).toISOString().split("T")[0];
+						const percentComplete = row[5];
+						const status = percentComplete === 100 ? "Done" : "Pending/Blocked";
+
+						const originalTask = State.getTaskById(taskId);
+						const duration = originalTask ? originalTask.days : "N/A";
+
+						const dependencyIds = row[6] ? row[6].split(",") : [];
+						const dependencyNames = dependencyIds
+							.map((id) => State.getTaskById(id)?.name)
+							.filter(Boolean) // Remove any undefined/null if a task was not found
+							.join("; "); // Use semicolon to separate multiple dependencies
+
+						return [taskName, startDate, endDate, duration, status, dependencyNames].map(formatCsvField).join(",");
+					});
+
+					let csvContent = [headers.join(","), ...rows].join("\n");
+
+					const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+					const link = document.createElement("a");
+
+					const url = URL.createObjectURL(blob);
+					const filename = `${project.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_gantt_export.csv`;
+					link.setAttribute("href", url);
+					link.setAttribute("download", filename);
+					link.style.visibility = "hidden";
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+					URL.revokeObjectURL(url); // Clean up the object URL
+				}
 
 				createNewProject() {
 					const name = prompt("Enter new project name:");
