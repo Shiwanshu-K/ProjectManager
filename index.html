@@ -4,8 +4,11 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Visual Project Manager | Interactive Gantt Chart Planner</title>
-		
-		<meta name="description" content="A visual project management tool to plan, schedule, and track tasks. Create dependency graphs and generate interactive Gantt charts to identify bottlenecks and optimize your workflow." />
+
+		<meta
+			name="description"
+			content="A visual project management tool to plan, schedule, and track tasks. Create dependency graphs and generate interactive Gantt charts to identify bottlenecks and optimize your workflow."
+		/>
 		<meta name="keywords" content="project manager, gantt chart, task dependency, visual planner, workflow, timeline, project planning tool" />
 
 		<meta property="og:type" content="website" />
@@ -22,10 +25,10 @@
 
 		<link rel="preconnect" href="https://www.gstatic.com" />
 		<link rel="dns-prefetch" href="https://www.gstatic.com" />
-		
+
 		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 		<style>
-            /* ACCESSIBILITY: Added a class to visually hide content but keep it available for screen readers. */
+			/* ACCESSIBILITY: Added a class to visually hide content but keep it available for screen readers. */
 			.sr-only {
 				position: absolute;
 				width: 1px;
@@ -495,8 +498,8 @@
 			<h1 class="sr-only">Visual Project Manager Canvas</h1>
 			<canvas id="canvas" aria-label="Interactive project canvas where tasks can be added and connected">
 				<p>
-					This project management web app lets users visualize project dependencies and timelines through an interactive graph and Gantt chart generator. Users can add, edit, and organize tasks to
-					identify workflow bottlenecks and optimize delivery schedules.
+					This project management web app lets users visualize project dependencies and timelines through an interactive graph and Gantt chart generator. Users can add, edit, and organize
+					tasks to identify workflow bottlenecks and optimize delivery schedules.
 				</p>
 			</canvas>
 		</main>
@@ -549,7 +552,7 @@
 				</div>
 			</div>
 		</div>
-		
+
 		<script type="module">
 			// Import the functions you need from the SDKs you need
 			import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
@@ -2094,6 +2097,7 @@
 					if (clickedTask) {
 						State.connectingFrom = clickedTask.id;
 						this.hideDependencyTooltip();
+						this.fullUpdateAndRender(); 
 					}
 				}
 
