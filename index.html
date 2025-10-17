@@ -2,22 +2,41 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-		<meta property="og:title" content="Visual Project Manager — Plan Smarter" />
-		<meta property="og:description" content="Visualize your project tasks and dependencies with this interactive Gantt-based project manager." />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Visual Project Manager | Interactive Gantt Chart Planner</title>
+		
+		<meta name="description" content="A visual project management tool to plan, schedule, and track tasks. Create dependency graphs and generate interactive Gantt charts to identify bottlenecks and optimize your workflow." />
+		<meta name="keywords" content="project manager, gantt chart, task dependency, visual planner, workflow, timeline, project planning tool" />
+
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content="https://shiwanshu-k.github.io/ProjectManager/" />
+		<meta property="og:title" content="Visual Project Manager — Plan Smarter" />
+		<meta property="og:description" content="Visualize your project tasks and dependencies with this interactive Gantt-based project manager." />
 		<meta property="og:image" content="https://shiwanshu-k.github.io/ProjectManager/assets/preview.png" />
 
 		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:url" content="https://shiwanshu-k.github.io/ProjectManager/" />
 		<meta name="twitter:title" content="Visual Project Manager — Plan Smarter" />
 		<meta name="twitter:description" content="Interactive Gantt-based project planner to visualize bottlenecks and timelines." />
 		<meta name="twitter:image" content="https://shiwanshu-k.github.io/ProjectManager/assets/preview.png" />
+
 		<link rel="preconnect" href="https://www.gstatic.com" />
 		<link rel="dns-prefetch" href="https://www.gstatic.com" />
-		<title>Project Manager to visualise your bottlenecks</title>
+		
 		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 		<style>
+            /* ACCESSIBILITY: Added a class to visually hide content but keep it available for screen readers. */
+			.sr-only {
+				position: absolute;
+				width: 1px;
+				height: 1px;
+				padding: 0;
+				margin: -1px;
+				overflow: hidden;
+				clip: rect(0, 0, 0, 0);
+				white-space: nowrap;
+				border-width: 0;
+			}
 			body {
 				margin: 0;
 				overflow: hidden;
@@ -444,9 +463,9 @@
 		</style>
 	</head>
 	<body>
-		<div id="sidebar" class="collapsed">
-			<button id="sidebarToggle" class="sidebar-toggle-btn">&lt;</button>
-			<div id="toolbar">
+		<aside id="sidebar" class="collapsed">
+			<button id="sidebarToggle" class="sidebar-toggle-btn" aria-label="Toggle settings panel" aria-expanded="false">&lt;</button>
+			<nav id="toolbar">
 				<div class="toolbar-group">
 					<label for="projectSelector" class="toolbar-label">Project:</label>
 					<select id="projectSelector" class="toolbar-item"></select>
@@ -469,16 +488,24 @@
 				</div>
 				<button id="helpBtn" class="btn">Help</button>
 				<button id="deleteProjectBtn" class="btn">Delete Project</button>
-			</div>
-		</div>
+			</nav>
+		</aside>
 
-		<canvas id="canvas"></canvas>
+		<main>
+			<h1 class="sr-only">Visual Project Manager Canvas</h1>
+			<canvas id="canvas" aria-label="Interactive project canvas where tasks can be added and connected">
+				<p>
+					This project management web app lets users visualize project dependencies and timelines through an interactive graph and Gantt chart generator. Users can add, edit, and organize tasks to
+					identify workflow bottlenecks and optimize delivery schedules.
+				</p>
+			</canvas>
+		</main>
 
 		<div id="dependencyMenu">Delete Dependency</div>
 
-		<div id="ganttModal" class="modal">
+		<div id="ganttModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ganttModalTitle">
 			<div class="modal-content">
-				<h2>Project Gantt Chart</h2>
+				<h2 id="ganttModalTitle">Project Gantt Chart</h2>
 				<div id="ganttChartDiv"></div>
 				<div class="modal-footer">
 					<button id="exportGanttCsvBtn">Export CSV</button>
@@ -487,8 +514,8 @@
 			</div>
 		</div>
 
-		<div id="taskModal" class="modal">
-			<h2>Edit Task</h2>
+		<div id="taskModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="taskModalTitle">
+			<h2 id="taskModalTitle">Edit Task</h2>
 			<input type="text" id="taskName" placeholder="Task name" />
 			<input type="number" id="taskDays" placeholder="Estimated Days" min="0.5" step="0.5" />
 			<textarea id="taskDesc" placeholder="Task description"></textarea>
@@ -502,9 +529,9 @@
 			</div>
 		</div>
 
-		<div id="nodeMenu">
-			<button id="editBtn">Edit</button>
-			<button id="deleteBtn">Delete</button>
+		<div id="nodeMenu" role="menu">
+			<button id="editBtn" role="menuitem">Edit</button>
+			<button id="deleteBtn" role="menuitem">Delete</button>
 		</div>
 
 		<div id="coachmark-overlay">
@@ -522,13 +549,7 @@
 				</div>
 			</div>
 		</div>
-
-		<section id="app-description" style="display: none">
-			<p>
-				This project management web app lets users visualize project dependencies and timelines through an interactive graph and Gantt chart generator. Users can add, edit, and organize tasks to
-				identify workflow bottlenecks and optimize delivery schedules.
-			</p>
-		</section>
+		
 		<script type="module">
 			// Import the functions you need from the SDKs you need
 			import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
@@ -538,6 +559,8 @@
 
 			// Your web app's Firebase configuration
 			// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+			// SECURITY WARNING: Exposing API keys in client-side code can be a risk.
+			// Ensure you have set up proper Firebase Security Rules and/or App Check to protect your data.
 			const firebaseConfig = {
 				apiKey: "AIzaSyBRkq7Ad3C0oMSkQZUoMORMp4O6IsrxpDU",
 				authDomain: "projectmanager-3457f.firebaseapp.com",
@@ -1303,21 +1326,21 @@
 			const UI = {
 				toggleSidebar() {
 					DOM.sidebar.classList.toggle("collapsed");
-					if (DOM.sidebar.classList.contains("collapsed")) {
-						DOM.sidebarToggle.innerHTML = "&lt;";
-					} else {
-						DOM.sidebarToggle.innerHTML = "&gt;";
-					}
+					const isCollapsed = DOM.sidebar.classList.contains("collapsed");
+					DOM.sidebarToggle.setAttribute("aria-expanded", !isCollapsed);
+					DOM.sidebarToggle.innerHTML = isCollapsed ? "&lt;" : "&gt;";
 				},
 				expandSidebar() {
 					if (DOM.sidebar.classList.contains("collapsed")) {
 						DOM.sidebar.classList.remove("collapsed");
+						DOM.sidebarToggle.setAttribute("aria-expanded", "true");
 						DOM.sidebarToggle.innerHTML = "&gt;";
 					}
 				},
 				collapseSidebar() {
 					if (!DOM.sidebar.classList.contains("collapsed")) {
 						DOM.sidebar.classList.add("collapsed");
+						DOM.sidebarToggle.setAttribute("aria-expanded", "false");
 						DOM.sidebarToggle.innerHTML = "&lt;";
 					}
 				},
