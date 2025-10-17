@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<meta charset="UTF-M-8" />
+		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta property="og:title" content="Visual Project Manager — Plan Smarter" />
 		<meta property="og:description" content="Visualize your project tasks and dependencies with this interactive Gantt-based project manager." />
@@ -327,6 +327,26 @@
 				background: #e9ecef;
 			}
 
+			/* --- NEW: Dependency Tooltip Styling --- */
+			#dependencyMenu {
+				position: absolute;
+				background: #dc3545; /* Red for delete action */
+				color: white;
+				border-radius: 4px;
+				padding: 4px 8px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+				z-index: 200;
+				display: none;
+				font-size: 12px;
+				font-weight: 600;
+				cursor: pointer;
+				transition: background 0.1s;
+			}
+
+			#dependencyMenu:hover {
+				background: #c82333;
+			}
+
 			/* --- Coach Mark Styling --- */
 			#coachmark-overlay {
 				display: none;
@@ -446,6 +466,10 @@
 		</div>
 
 		<canvas id="canvas"></canvas>
+
+		<div id="dependencyMenu">
+			Delete Dependency
+		</div>
 
 		<div id="ganttModal" class="modal">
 			<div class="modal-content">
@@ -588,6 +612,7 @@
 					blocked: { background: "#f8d7da", border: "#dc3545", text: "#dc3545" },
 					pending: { background: "#fff3cd", border: "#ffc107", text: "#ffc107" },
 					done: { background: "#d4edda", border: "#28a745", text: "#28a745" },
+					highlight: "#007bff", // Color for dependency highlight
 				},
 				TEXT_COLOR: "#333",
 				COLUMN_SPACING: 250,
@@ -596,6 +621,7 @@
 				CANVAS_PADDING_Y: 100, // Increased top padding to avoid toolbar
 				STORAGE_KEY_STATE: "taskDepVizState_v2", // Updated key for new data structure
 				STORAGE_KEY_COACHMARK_DONE: "taskDepVizCoachmarkDone",
+				DEPENDENCY_HIT_TOLERANCE: 12, // New config for click/hover area around dependency
 				GANTT_OPTIONS: {
 					height: 275,
 					gantt: {
@@ -618,6 +644,7 @@
 				connectingFrom: null,
 				dragging: null,
 				mouse: { x: 0, y: 0 },
+				hoveringDependency: null, // NEW: Stores the [fromId, toId] of the hovered dependency
 				getCurrentProject() {
 					return this.projects[this.currentProjectId];
 				},
@@ -666,6 +693,8 @@
 				nodeMenu: document.getElementById("nodeMenu"),
 				editBtn: document.getElementById("editBtn"),
 				deleteBtn: document.getElementById("deleteBtn"),
+				// NEW: Dependency Menu/Tooltip
+				dependencyMenu: document.getElementById("dependencyMenu"),
 				// Coachmarks
 				coachmarkOverlay: document.getElementById("coachmark-overlay"),
 				coachmarkHighlight: document.getElementById("coachmark-highlight"),
@@ -1184,8 +1213,16 @@
 						const fromY = from.y + from.height / 2;
 						const toX = to.x;
 						const toY = to.y + to.height / 2;
-						const color = Config.STATUS_COLORS[to.status]?.border || "#555";
-						this._drawArrow(fromX, fromY, toX, toY, color);
+						let color = Config.STATUS_COLORS[to.status]?.border || "#555";
+						let thickness = 3;
+
+						// NEW: Check for highlight
+						if (State.hoveringDependency && State.hoveringDependency[0] === fromId && State.hoveringDependency[1] === toId) {
+							color = Config.STATUS_COLORS.highlight;
+							thickness = 5;
+						}
+
+						this._drawArrow(fromX, fromY, toX, toY, color, false, thickness);
 					});
 				},
 
@@ -1194,16 +1231,16 @@
 					if (from) {
 						const fromX = from.x + from.width;
 						const fromY = from.y + from.height / 2;
-						this._drawArrow(fromX, fromY, State.mouse.x, State.mouse.y, "#555", true);
+						this._drawArrow(fromX, fromY, State.mouse.x, State.mouse.y, "#555", true, 3);
 					}
 				},
 
-				_drawArrow(x1, y1, x2, y2, color, dashed = false) {
+				_drawArrow(x1, y1, x2, y2, color, dashed = false, thickness = 3) {
 					const { ctx } = DOM;
 					ctx.beginPath();
 					ctx.setLineDash(dashed ? [5, 5] : []);
 					ctx.strokeStyle = color;
-					ctx.lineWidth = 3;
+					ctx.lineWidth = thickness;
 
 					const dx = x2 - x1;
 					ctx.moveTo(x1, y1);
@@ -1354,6 +1391,7 @@
 				constructor() {
 					this.offsetX = 0;
 					this.offsetY = 0;
+					this.isHoveringCanvasElement = false; // Prevents showing dependency menu on tasks
 				}
 
 				init() {
@@ -1453,6 +1491,8 @@
 					DOM.closeModalBtn.onclick = () => UI.hideTaskModal();
 					DOM.closeGanttModalBtn.onclick = () => UI.hideGanttModal();
 					DOM.exportGanttCsvBtn.onclick = () => this.exportGanttToCSV();
+					// NEW: Dependency menu listener
+					DOM.dependencyMenu.onclick = () => this.deleteDependency(State.hoveringDependency);
 					window.onresize = () => {
 						DOM.canvas.width = window.innerWidth;
 						DOM.canvas.height = window.innerHeight;
@@ -1633,6 +1673,18 @@
 					this.fullUpdateAndRender();
 				}
 
+				// NEW: Delete a specific dependency
+				deleteDependency([fromId, toId]) {
+					const project = State.getCurrentProject();
+					if (!project) return;
+
+					project.dependencies = project.dependencies.filter(([f, t]) => !(f === fromId && t === toId));
+					State.hoveringDependency = null; // Clear the hover state
+					this.hideDependencyTooltip();
+					this.saveState();
+					this.fullUpdateAndRender();
+				}
+
 				arrangeTasks() {
 					const project = State.getCurrentProject();
 					if (!project || project.tasks.length === 0) return;
@@ -1663,13 +1715,72 @@
 					return {
 						x: e.clientX - rect.left,
 						y: e.clientY - rect.top,
+						clientX: e.clientX, // Added for the dependency menu
+						clientY: e.clientY, // Added for the dependency menu
 					};
+				}
+
+				// NEW: Checks if a point is close to a dependency arrow
+				getDependencyAtPoint(x, y) {
+					const project = State.getCurrentProject();
+					if (!project) return null;
+					const tolerance = Config.DEPENDENCY_HIT_TOLERANCE;
+
+					for (const [fromId, toId] of project.dependencies) {
+						const from = State.getTaskById(fromId);
+						const to = State.getTaskById(toId);
+						if (!from || !to) continue;
+
+						const x1 = from.x + from.width;
+						const y1 = from.y + from.height / 2;
+						const x2 = to.x;
+						const y2 = to.y + to.height / 2;
+
+						// Use the bezier curve formula to check proximity.
+						// A simplified check is performed by sampling points along the bezier curve
+						// and checking the distance to the mouse point.
+						const steps = 10;
+						for (let i = 0; i <= steps; i++) {
+							const t = i / steps;
+							const dx = x2 - x1;
+
+							// Approximate curve point (P) using cubic bezier. Control points are implicitly (x1 + dx/2, y1) and (x2 - dx/2, y2)
+							const px = (1 - t) ** 3 * x1 + 3 * (1 - t) ** 2 * t * (x1 + dx * 0.5) + 3 * (1 - t) * t ** 2 * (x2 - dx * 0.5) + t ** 3 * x2;
+							const py = (1 - t) ** 3 * y1 + 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3 * y2;
+
+							const distance = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+
+							if (distance <= tolerance) {
+								return [fromId, toId, px, py]; // Return dependency and midpoint coordinates
+							}
+						}
+					}
+					return null;
+				}
+
+				// NEW: Manage dependency tooltip display
+				showDependencyTooltip([fromId, toId, x, y]) {
+					const rect = DOM.canvas.getBoundingClientRect();
+					const menu = DOM.dependencyMenu;
+					menu.style.left = `${rect.left + x + 10}px`; // Offset a bit from the point
+					menu.style.top = `${rect.top + y - menu.offsetHeight / 2}px`;
+					menu.style.display = "block";
+				}
+
+				hideDependencyTooltip() {
+					DOM.dependencyMenu.style.display = "none";
 				}
 
 				handleClick(e) {
 					const pos = this._getMousePos(e);
 					const project = State.getCurrentProject();
 					if (!project) return;
+
+					if (State.hoveringDependency) {
+						// Clicked on a dependency, so the deletion handler will fire via DOM.dependencyMenu.onclick
+						// We prevent the rest of the canvas click handling from running.
+						return;
+					}
 
 					for (const task of project.tasks) {
 						if (task.checkboxClicked(pos.x, pos.y) && task.status !== "blocked") {
@@ -1693,16 +1804,22 @@
 							return;
 						}
 					}
+
+					// Hide dependency menu if we click anywhere else
+					this.hideDependencyTooltip();
 				}
 
 				handleMouseDown(e) {
 					const pos = this._getMousePos(e);
 					UI.hideNodeMenu();
+					this.hideDependencyTooltip(); // Hide dependency menu on mousedown
 					const project = State.getCurrentProject();
 					if (!project) return;
 
+					this.isHoveringCanvasElement = false;
 					for (const task of [...project.tasks].reverse()) {
 						if (task.contains(pos.x, pos.y)) {
+							this.isHoveringCanvasElement = true; // Mark as hovering on a task node
 							if (task.menuClicked(pos.x, pos.y)) {
 								UI.showNodeMenu(task, e.clientX, e.clientY);
 								return;
@@ -1728,6 +1845,23 @@
 						Renderer.draw();
 					} else if (State.connectingFrom) {
 						Renderer.draw();
+					} else {
+						// NEW: Check for dependency hover
+						const dependencyHit = this.getDependencyAtPoint(pos.x, pos.y);
+						const oldHover = State.hoveringDependency;
+						
+						if (dependencyHit) {
+							State.hoveringDependency = [dependencyHit[0], dependencyHit[1]];
+							this.showDependencyTooltip([dependencyHit[0], dependencyHit[1], dependencyHit[2], dependencyHit[3]]);
+						} else {
+							State.hoveringDependency = null;
+							this.hideDependencyTooltip();
+						}
+
+						// Only re-render if the hover state has changed
+						if (oldHover !== State.hoveringDependency) {
+							Renderer.draw();
+						}
 					}
 				}
 
@@ -1769,6 +1903,7 @@
 					const clickedTask = project.tasks.find((t) => t.contains(pos.x, pos.y));
 					if (clickedTask) {
 						State.connectingFrom = clickedTask.id;
+						this.hideDependencyTooltip(); // Hide menu when starting a new connection
 					}
 				}
 			}
