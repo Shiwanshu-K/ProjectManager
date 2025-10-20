@@ -463,6 +463,14 @@
 				opacity: 0;
 				transition: opacity 0.3s ease-in-out;
 			}
+			@media (max-width: 768px) {
+				#coachmark-box {
+					bottom: 5%;
+					top:auto;
+					left: 50%;
+					transform: translate(-50%, -5%);
+				}
+			}
 		</style>
 	</head>
 	<body>
@@ -1974,7 +1982,7 @@
 						State.dragging.x = pos.x - this.offsetX;
 						State.dragging.y = pos.y - this.offsetY;
 						Renderer.draw();
-					} else if (State.connectingFrom) {
+					} else if (State.connectingFrom && e.type === "mousemove") {
 						Renderer.draw();
 					} else {
 						let isOverTask = project.tasks.some((task) => task.contains(pos.x, pos.y));
@@ -2023,7 +2031,7 @@
 						stateChanged = true; // Save new camera position
 					}
 
-					if (State.connectingFrom) {
+					if (State.connectingFrom && e.type === "mouseup") {
 						const target = project.tasks.find((t) => t.contains(pos.x, pos.y));
 						if (target && target.id !== State.connectingFrom) {
 							if (Logic.createsCycle(State.connectingFrom, target.id)) {
@@ -2050,7 +2058,31 @@
 					const project = State.getCurrentProject();
 					if (!project) return;
 
-					
+					if (State.connectingFrom) {
+						const tappedTask = project.tasks.find((t) => t.contains(pos.x, pos.y));
+
+						if (tappedTask) {
+							if (tappedTask.id === State.connectingFrom) {
+								// Tapped the same active node, so cancel the mode
+								State.connectingFrom = null;
+							} else {
+								// Tapped a different node, so create the dependency
+								if (Logic.createsCycle(State.connectingFrom, tappedTask.id)) {
+									alert("This dependency would create a cycle and is not allowed.");
+								} else {
+									const exists = project.dependencies.some(([f, t]) => f === State.connectingFrom && t === tappedTask.id);
+									if (!exists) {
+										project.dependencies.push([State.connectingFrom, tappedTask.id]);
+										this.saveState();
+									}
+								}
+								// Deactivate mode after attempting to create the dependency
+								State.connectingFrom = null;
+							}
+							this.fullUpdateAndRender();
+							return; // Exit the tap handler since we've handled the action
+						}
+					}
 
 					// Single Tap Logic
 					// Check for checkbox click
@@ -2105,7 +2137,7 @@
 					if (clickedTask) {
 						State.connectingFrom = clickedTask.id;
 						this.hideDependencyTooltip();
-						this.fullUpdateAndRender(); 
+						this.fullUpdateAndRender();
 					}
 				}
 
