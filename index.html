@@ -1204,6 +1204,12 @@
 						ctx.roundRect(task.x, task.y, task.width, task.height, 10).stroke();
 						ctx.shadowColor = "transparent";
 
+						if (State.connectingFrom === task.id) {
+							ctx.strokeStyle = Config.STATUS_COLORS.highlight;
+							ctx.lineWidth = 4;
+							ctx.roundRect(task.x - 2, task.y - 2, task.width + 4, task.height + 4, 12).stroke(); // Draw a slightly larger outline
+						}
+
 						ctx.fillStyle = Config.TEXT_COLOR;
 						ctx.font = "bold 14px 'JetBrains Mono', monospace";
 						ctx.fillText(task.name, task.x + 12, task.y + 28);
@@ -1888,9 +1894,11 @@
 							// For touch, set a timer for long press to show menu
 							if (e.type === "touchstart") {
 								this.longPressTimer = setTimeout(() => {
-									UI.showNodeMenu(task, pos.clientX, pos.clientY);
+									// NEW: Long press on mobile starts dependency connection
+									State.connectingFrom = task.id;
 									this.longPressTimer = null; // Clear timer
 									State.dragging = null; // Prevent drag after menu shows
+									this.fullUpdateAndRender(); // Re-render to show highlight
 								}, Config.LONG_PRESS_THRESHOLD);
 							}
 							// For mouse, menu is handled on single click
@@ -2042,14 +2050,7 @@
 					const project = State.getCurrentProject();
 					if (!project) return;
 
-					// Double Tap Logic
-					const currentTime = new Date().getTime();
-					if (currentTime - this.lastTap < Config.DOUBLE_TAP_THRESHOLD) {
-						this.handleDoubleClick(pos);
-						this.lastTap = 0; // Reset after double tap
-						return;
-					}
-					this.lastTap = currentTime;
+					
 
 					// Single Tap Logic
 					// Check for checkbox click
@@ -2072,6 +2073,13 @@
 							}
 							this.saveState();
 							this.fullUpdateAndRender();
+							return;
+						}
+					}
+
+					for (const task of project.tasks) {
+						if (task.menuClicked(pos.x, pos.y)) {
+							UI.showNodeMenu(task, pos.clientX, pos.clientY);
 							return;
 						}
 					}
