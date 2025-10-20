@@ -1,0 +1,443 @@
+/* ACCESSIBILITY: Added a class to visually hide content but keep it available for screen readers. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+body {
+	margin: 0;
+	overflow: hidden;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+	background: #f4f6f8;
+}
+
+canvas {
+	background: #f4f6f8;
+	image-rendering: crisp-edges;
+	cursor: grab; /* Add grab cursor for panning */
+	touch-action: none; /* Prevents default browser actions like scroll/zoom on canvas */
+	-webkit-user-select: none; /* Safari */
+	-ms-user-select: none; /* IE 10+ */
+	user-select: none; /* Standard */
+	-webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+}
+
+/* --- Sidebar & Toolbar Styling (Replaced original #toolbar style) --- */
+#sidebar {
+	position: fixed;
+	top: 0;
+	right: 0;
+	width: 220px;
+	height: 100vh;
+	background: #fdfdff;
+	box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+	z-index: 20;
+	transition: transform 0.3s ease-in-out;
+	transform: translateX(0);
+	border-left: 1px solid #e0e0e0;
+}
+
+#sidebar.collapsed {
+	transform: translateX(100%);
+}
+
+.sidebar-toggle-btn {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	transform: translate(-100%, -50%); /* Position it just outside the sidebar */
+	width: 30px;
+	height: 50px;
+	background: #007bff;
+	color: white;
+	border: none;
+	cursor: pointer;
+	font-size: 18px;
+	font-weight: bold;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px 0 0 8px;
+	box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.15);
+	transition: background-color 0.2s;
+}
+.sidebar-toggle-btn:hover {
+	background-color: #0056b3;
+}
+
+#toolbar {
+	display: flex;
+	flex-direction: column; /* Vertical layout */
+	align-items: stretch; /* Stretch items to full width */
+	gap: 15px;
+	padding: 20px 15px;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.btn,
+.toolbar-item {
+	padding: 10px 16px;
+	border: none;
+	border-radius: 6px;
+	background: #007bff;
+	color: white;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 600;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+	transition: background 0.2s, box-shadow 0.2s;
+	text-align: center;
+}
+
+.btn:hover {
+	background: #0069d9;
+	box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+#helpBtn {
+	background: #17a2b8;
+}
+#helpBtn:hover {
+	background: #138496;
+}
+
+#deleteProjectBtn {
+	background: #dc3545;
+}
+#deleteProjectBtn:hover {
+	background: #c82333;
+}
+
+.toolbar-group {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	border-top: 1px solid #eee;
+	padding-top: 15px;
+}
+
+#projectStartDate,
+#projectSelector {
+	border: 1px solid #ccc;
+	background-color: #fff;
+	color: #333;
+	padding: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	border-radius: 4px;
+}
+
+.toolbar-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: #555;
+	text-align: left;
+}
+
+.project-actions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 5px;
+}
+.project-actions button {
+	padding: 8px;
+	font-size: 12px;
+}
+#newProjectBtn {
+	background: #28a745;
+}
+#newProjectBtn:hover {
+	background: #218838;
+}
+#renameProjectBtn {
+	background: #ffc107;
+	color: #212529;
+}
+#renameProjectBtn:hover {
+	background: #e0a800;
+}
+/* --- Added for the new checkbox --- */
+.toolbar-checkbox-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 0;
+}
+/* --- Modal Styling --- */
+.modal {
+	display: none;
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: white;
+	border-radius: 8px;
+	padding: 20px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+	z-index: 100;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.modal-content {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+#taskModal {
+	width: 320px;
+}
+
+#ganttModal {
+	width: 85%;
+	height: 85%;
+	max-width: 1400px;
+	display: none; /* Changed from 'flex' to 'none' by default */
+}
+
+.modal h2 {
+	margin-top: 0;
+	font-size: 18px;
+	color: #333;
+	border-bottom: 1px solid #eee;
+	padding-bottom: 10px;
+	margin-bottom: 15px;
+	font-weight: 700;
+	flex-shrink: 0;
+}
+
+.modal input:not([type="checkbox"]),
+.modal textarea {
+	width: 100%;
+	margin: 8px 0;
+	padding: 10px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 14px;
+	box-sizing: border-box;
+}
+
+.modal input:focus,
+.modal textarea:focus {
+	border-color: #007bff;
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.modal textarea {
+	resize: vertical;
+	height: 80px;
+}
+
+.modal-checkbox-group {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 15px 0;
+	font-size: 14px;
+	color: #555;
+}
+
+.modal-footer {
+	text-align: right;
+	margin-top: 15px;
+	flex-shrink: 0;
+}
+
+.modal-footer button {
+	margin-left: 10px;
+	padding: 10px 18px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-family: inherit;
+	font-weight: 600;
+	transition: opacity 0.2s;
+}
+
+.modal-footer button:hover {
+	opacity: 0.9;
+}
+
+#saveTask {
+	background: #007bff;
+	color: white;
+}
+
+#closeModal,
+#closeGanttModal {
+	background: #6c757d;
+	color: white;
+}
+
+#exportGanttCsvBtn {
+	background: #28a745;
+	color: white;
+}
+#exportGanttCsvBtn:hover {
+	background: #218838;
+}
+
+#ganttChartDiv {
+	width: 100%;
+	flex-grow: 1;
+	min-height: 200px;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+	overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
+/* --- Node Context Menu Styling --- */
+#nodeMenu {
+	position: absolute;
+	background: white;
+	border-radius: 6px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+	padding: 4px 0;
+	display: none;
+	flex-direction: column;
+	z-index: 200;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+	min-width: 100px;
+}
+
+#nodeMenu button {
+	border: none;
+	background: none;
+	padding: 8px 12px;
+	text-align: left;
+	cursor: pointer;
+	font-size: 13px;
+	width: 100%;
+	color: #333;
+}
+
+#nodeMenu button:hover {
+	background: #e9ecef;
+}
+
+/* --- NEW: Dependency Tooltip Styling --- */
+#dependencyMenu {
+	position: absolute;
+	background: #dc3545; /* Red for delete action */
+	color: white;
+	border-radius: 4px;
+	padding: 4px 8px;
+	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+	z-index: 200;
+	display: none;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.1s;
+}
+
+#dependencyMenu:hover {
+	background: #c82333;
+}
+
+/* --- Coach Mark Styling --- */
+#coachmark-overlay {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 9998;
+}
+#coachmark-highlight {
+	position: absolute;
+	border-radius: 8px;
+	box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 255, 255, 0.7);
+	transition: all 0.3s ease-in-out;
+	pointer-events: none;
+}
+
+#coachmark-box {
+	position: fixed;
+	top: 20%;
+	left: 50%;
+	transform: translate(-50%, -20%);
+	background: #fff;
+	color: #333;
+	padding: 15px 20px;
+	border-radius: 8px;
+	width: 320px;
+	box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+	z-index: 9999;
+	transition: all 0.3s ease-in-out;
+}
+
+#coachmark-box h3 {
+	margin-top: 0;
+	font-size: 16px;
+	color: #0056b3;
+}
+
+#coachmark-box p {
+	font-size: 14px;
+	line-height: 1.5;
+	margin-bottom: 15px;
+}
+
+#coachmark-nav {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-top: 1px solid #eee;
+	padding-top: 10px;
+	margin-top: 10px;
+}
+
+#coachmark-step-counter {
+	font-size: 12px;
+	color: #666;
+}
+
+#coachmark-nav button {
+	background: #007bff;
+	color: white;
+	border: none;
+	padding: 8px 12px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+#coachmark-nav button:hover {
+	background: #0056b3;
+}
+#coachmark-nav button#coachmark-prev {
+	background: #6c757d;
+}
+#coachmark-nav button#coachmark-prev:hover {
+	background: #5a6268;
+}
+
+#coachmark-arrow-svg {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 9998;
+	opacity: 0;
+	transition: opacity 0.3s ease-in-out;
+}
+@media (max-width: 768px) {
+	#coachmark-box {
+		bottom: 5%;
+		top: auto;
+		left: 50%;
+		transform: translate(-50%, -5%);
+	}
+}
