@@ -376,6 +376,7 @@ canvas {
 	box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 	z-index: 9999;
 	transition: all 0.3s ease-in-out;
+    bottom: auto !important;
 }
 
 #coachmark-box h3 {
