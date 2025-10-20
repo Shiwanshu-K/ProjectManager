@@ -11,7 +11,7 @@ class Task {
 		this.days = days;
 		this.width = 180;
 		this.height = 90;
-		this.status = "pending"; // This is calculated and updated by the Logic module
+		this.status = "pending"; // This is calculated by the Logic module
 		this.isDoneByUser = isDoneByUser;
 	}
 
@@ -32,5 +32,17 @@ class Task {
 		const checkboxX = this.x + this.width - checkboxHitArea;
 		const checkboxY = this.y + this.height - checkboxHitArea;
 		return x >= checkboxX && x <= checkboxX + checkboxHitArea && y >= checkboxY && y <= checkboxY + checkboxHitArea;
+	}
+
+	/** Gets the task's bounding box in canvas screen coordinates */
+	getRectInCanvas() {
+		const project = State.getCurrentProject();
+		if (!project) return { x: 0, y: 0, width: 0, height: 0 };
+		return {
+			x: this.x * project.zoom + project.camera.x,
+			y: this.y * project.zoom + project.camera.y,
+			width: this.width * project.zoom,
+			height: this.height * project.zoom,
+		};
 	}
 }

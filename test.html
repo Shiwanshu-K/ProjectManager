@@ -1,238 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<meta charset="UTF-M-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Project Manager - Test Suite (Fixed)</title>
-		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+		<meta charset="UTF-8" />
+		<title>Project Manager - Test Suite</title>
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.2.2/mocha.min.css" />
 		<style>
+			/* Keep Mocha visible but hide the app elements */
 			body {
-				margin: 0;
-				overflow: hidden;
-				font-family: "JetBrains Mono", "Fira Code", monospace;
+				font-family: monospace;
 			}
-			#sidebar,
-			#taskModal,
-			#ganttModal,
-			#nodeMenu,
-			#coachmark-overlay {
+			#app-container {
 				visibility: hidden;
-			}
-			#mocha {
-				position: fixed;
-				top: 10px;
-				left: 10px;
-				margin: 0;
-				z-index: 1000;
-				background: rgba(255, 255, 255, 0.95);
-				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-				max-height: 95vh;
-				overflow-y: auto;
-				font-size: 12px;
+				position: absolute;
+				width: 0;
+				height: 0;
+				overflow: hidden;
 			}
 		</style>
 	</head>
 	<body>
+		<!-- Test runner UI -->
 		<div id="mocha"></div>
-		<canvas id="canvas"></canvas>
-		<div id="taskModal"><input type="text" id="taskName" /><input type="number" id="taskDays" /></div>
-		<div id="toolbar"><input type="checkbox" id="excludeWeekends" checked /></div>
 
-		<script>
-			let app;
-			document.addEventListener("DOMContentLoaded", () => {
-				google.charts.load("current", { packages: ["gantt"] });
-				google.charts.setOnLoadCallback(() => {
-					app = new App();
-					app.init();
-					if (window.runTests) window.runTests();
-				});
-			});
-			class Task {
-				constructor(t, e, s, o, i, n = !1, a = 1) {
-					(this.id = t), (this.name = e), (this.desc = s), (this.x = o), (this.y = i), (this.days = a), (this.width = 180), (this.height = 90), (this.status = "pending"), (this.isDoneByUser = n);
-				}
-				contains(t, e) {
-					return t > this.x && t < this.x + this.width && e > this.y && e < this.y + this.height;
-				}
-			}
-			const Config = { STORAGE_KEY_STATE: "taskDepVizState_v3_test" },
-				State = {
-					projects: {},
-					currentProjectId: null,
-					editingTask: null,
-					connectingFrom: null,
-					hoveredDependency: null,
-					getCurrentProject() {
-						return this.projects[this.currentProjectId];
-					},
-					getTaskById(t) {
-						const e = this.getCurrentProject();
-						return e ? e.tasks.find((e) => e.id === t) : null;
-					},
-				},
-				DOM = { taskNameInput: document.getElementById("taskName"), taskDaysInput: document.getElementById("taskDays"), excludeWeekendsCheckbox: document.getElementById("excludeWeekends") },
-				Logic = {
-					updateTaskStatuses() {
-						const t = State.getCurrentProject();
-						t &&
-							t.tasks.forEach((e) => {
-								const s = t.dependencies.filter((t) => t[1] === e.id).map((t) => State.getTaskById(t[0])),
-									o = s.some((t) => t && "done" !== t.status);
-								(e.status = o ? "blocked" : e.isDoneByUser ? "done" : "pending"), o && e.isDoneByUser && (e.isDoneByUser = !1);
-							});
-					},
-					calculateTaskSchedule() {
-						const t = State.getCurrentProject();
-						if (!t || 0 === t.tasks.length) return [];
-						const e = DOM.excludeWeekendsCheckbox.checked,
-							s = t.startDate ? new Date(t.startDate + "T00:00:00Z") : new Date(),
-							o = new Map();
-						return (
-							t.tasks.forEach((t) => o.set(t.id, { task: t, start: s, end: s })),
-							Array.from(o.values()).map((t) => [String(t.task.id), t.task.name, t.start, t.end])
-						);
-					},
-				};
-			class App {
-				constructor() {
-					(this.scale = 1), (this.panX = 0), (this.panY = 0);
-				}
-				init() {
-					this.loadState();
-				}
-				saveState() {
-					localStorage.setItem(Config.STORAGE_KEY_STATE, JSON.stringify({ projects: State.projects, currentProjectId: State.currentProjectId, view: { scale: this.scale, panX: this.panX, panY: this.panY } }));
-				}
-				loadState() {
-					const t = localStorage.getItem(Config.STORAGE_KEY_STATE);
-					if (t) {
-						const e = JSON.parse(t);
-						(State.projects = e.projects || {}), (State.currentProjectId = e.currentProjectId);
-						const s = e.view || { scale: 1, panX: 0, panY: 0 };
-						(this.scale = s.scale), (this.panX = s.panX), (this.panY = s.panY);
-						for (const o in State.projects) State.projects[o].tasks = State.projects[o].tasks.map((t) => new Task(t.id, t.name, t.desc, t.x, t.y, t.isDoneByUser, t.days));
-						State.projects[State.currentProjectId] || (State.currentProjectId = Object.keys(State.projects)[0] || null);
-					}
-					0 === Object.keys(State.projects).length && this.loadDefaultProject();
-				}
-				loadDefaultProject() {
-					const t = `proj_${Date.now()}`;
-					(State.projects[t] = { id: t, name: "My First Project", tasks: [new Task(1, "Plan Project", "", 0, 0, !0, 5)], dependencies: [], startDate: new Date().toISOString().split("T")[0] }), (State.currentProjectId = t);
-				}
-				fullUpdateAndRender() {
-					Logic.updateTaskStatuses();
-				}
-				createNewProject() {
-					const t = prompt(""),
-						e = `proj_${Date.now()}`;
-					t && t.trim() && ((State.projects[e] = { id: e, name: t.trim(), tasks: [], dependencies: [], startDate: new Date().toISOString().split("T")[0] }), this.switchProject(e));
-				}
-				renameProject() {
-					const t = State.getCurrentProject();
-					if (!t) return;
-					const e = prompt("");
-					e && e.trim() && (t.name = e.trim()), this.saveState();
-				}
-				deleteProject() {
-					if (!State.getCurrentProject() || !confirm("")) return;
-					delete State.projects[State.currentProjectId];
-					const t = Object.keys(State.projects);
-					t.length > 0 ? this.switchProject(t[0]) : ((State.currentProjectId = null), this.loadDefaultProject()), this.saveState();
-				}
-				switchProject(t) {
-					(State.currentProjectId = t), this.saveState();
-				}
-				saveTask() {
-					const t = DOM.taskNameInput.value.trim();
-					if (!t) return;
-					const e = State.getCurrentProject();
-					if (!e) return;
-					const s = parseFloat(DOM.taskDaysInput.value) || 1;
-					State.editingTask ? ((State.editingTask.name = t), (State.editingTask.days = s)) : e.tasks.push(new Task(Date.now(), t, "", 0, 0, !1, s)), this.saveState(), this.fullUpdateAndRender();
-				}
-				deleteTask(t) {
-					const e = State.getCurrentProject();
-					e && ((e.tasks = e.tasks.filter((e) => e.id !== t)), (e.dependencies = e.dependencies.filter((e) => e[0] !== t && e[1] !== t)), this.saveState(), this.fullUpdateAndRender());
-				}
-				deleteDependency(t, e) {
-					const s = State.getCurrentProject();
-					s && ((s.dependencies = s.dependencies.filter((s) => s[0] !== t || s[1] !== e)), this.saveState());
-				}
-				screenToWorld(t, e) {
-					return { x: (t - this.panX) / this.scale, y: (e - this.panY) / this.scale };
-				}
-			}
-		</script>
+		<!-- Hidden container for the app's DOM elements needed by tests -->
+		<div id="app-container">
+			<canvas id="canvas"></canvas>
+			<div id="sidebar">
+				<div id="toolbar">
+					<input type="checkbox" id="excludeWeekends" checked />
+				</div>
+			</div>
+			<div id="taskModal">
+				<input type="text" id="taskName" />
+				<input type="number" id="taskDays" />
+				<input type="text" id="taskDesc" />
+				<input type="checkbox" id="taskDone" />
+			</div>
+		</div>
 
+		<!-- Test Libraries -->
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.2.2/mocha.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.6/chai.min.js"></script>
+
+		<!-- Test Setup -->
 		<script>
-			window.runTests = () => {
-				const expect = chai.expect;
-				mocha.setup("bdd");
+			mocha.setup("bdd");
+			const expect = chai.expect;
+		</script>
+		<script src="test/test-setup.js"></script>
 
-				let prompt_val = "",
-					confirm_val = !1;
-				(window.prompt = () => prompt_val), (window.confirm = () => confirm_val), (window.alert = (t) => console.log("Alert:", t));
-				let dateNow = Date.now();
-				const originalDateNow = Date.now;
-				before(() => (Date.now = () => ++dateNow)), after(() => (Date.now = originalDateNow));
-				beforeEach(() => {
-					localStorage.clear(), (State.projects = {}), (State.currentProjectId = null), app.loadState(), app.fullUpdateAndRender();
-				});
+		<!-- Application Source Code -->
+		<script type="module" src="js/firebase.js"></script>
+		<script src="js/config.js"></script>
+		<script src="js/state.js"></script>
+		<script src="js/dom.js"></script>
+		<script src="js/task.js"></script>
+		<script src="js/logic.js"></script>
+		<script src="js/renderer.js"></script>
+		<script src="js/storage.js"></script>
+		<script src="js/ui.js"></script>
+		<script src="js/projectManager.js"></script>
+		<script src="js/taskManager.js"></script>
+		<script src="js/inputHandler.js"></script>
+		<script src="js/coachmarks.js"></script>
+		<script src="js/app.js"></script>
+		<!-- Renderer, UI, InputHandler, Coachmarks are not needed for logic tests -->
 
-				describe("Project Management", () => {
-					it("should create a new project", () => {
-						const t = Object.keys(State.projects).length;
-						(prompt_val = "Test Project"), app.createNewProject(), expect(Object.keys(State.projects).length).to.equal(t + 1), expect(State.getCurrentProject().name).to.equal("Test Project");
-					});
-					it("should rename the current project", () => {
-						(prompt_val = "Renamed Project"), app.renameProject(), expect(State.getCurrentProject().name).to.equal("Renamed Project");
-					});
-					it("should delete a project", () => {
-						(prompt_val = "Second Project"), app.createNewProject();
-						const t = State.currentProjectId,
-							e = Object.keys(State.projects).find((e) => e !== t);
-						app.switchProject(e), (confirm_val = !0), app.deleteProject(), expect(State.projects[e]).to.be.undefined, expect(State.currentProjectId).to.equal(t);
-					});
-				});
-				describe("Task Management", () => {
-					it("should add and edit a task", () => {
-						(DOM.taskNameInput.value = "New Task"), (DOM.taskDaysInput.value = 3), app.saveTask();
-						const t = State.getCurrentProject().tasks.find((t) => "New Task" === t.name);
-						expect(t).to.exist, (State.editingTask = t), (DOM.taskNameInput.value = "Edited"), (DOM.taskDaysInput.value = 5), app.saveTask(), expect(t.name).to.equal("Edited"), expect(t.days).to.equal(5);
-					});
-					it("should delete a task and its dependencies", () => {
-						const t = State.getCurrentProject();
-						t.tasks.push(new Task(2, "Task 2")), t.dependencies.push([1, 2]), app.deleteTask(1), expect(t.tasks.find((t) => 1 === t.id)).to.be.undefined, expect(t.dependencies.length).to.equal(0);
-					});
-				});
-				describe("Dependency Management", () => {
-					it("should delete a dependency", () => {
-						const t = State.getCurrentProject();
-						(t.tasks = [new Task(10, "A"), new Task(11, "B")]), (t.dependencies = [[10, 11]]), app.deleteDependency(10, 11), expect(t.dependencies.length).to.equal(0);
-					});
-				});
-				describe("Canvas Viewport", () => {
-					it("should correctly convert screen to world coordinates", () => {
-						(app.panX = 50), (app.panY = 100), (app.scale = 2);
-						const { x: t, y: e } = app.screenToWorld(250, 400);
-						expect(t).to.equal(100), expect(e).to.equal(150);
-					});
-				});
-				describe("Gantt Chart Logic", () => {
-					it("should calculate schedule correctly", () => {
-						(DOM.excludeWeekendsCheckbox.checked = !0);
-						const t = State.getCurrentProject();
-						(t.tasks = [new Task(1, "A", "", 0, 0, !1, 2)]), (t.startDate = "2025-10-17");
-						const e = Logic.calculateTaskSchedule(),
-							s = e.find((t) => "1" === t[0]);
-						expect(s[2].toISOString().split("T")[0]).to.equal("2025-10-17");
-					});
-				});
+		<!-- Test Files -->
+		<script src="test/logic.test.js"></script>
+		<script src="test/storage.test.js"></script>
+		<script src="test/projectManager.test.js"></script>
+		<script src="test/taskManager.test.js"></script>
 
+		<!-- Run Tests -->
+		<script>
+			window.onload = function () {
 				mocha.run();
 			};
 		</script>
